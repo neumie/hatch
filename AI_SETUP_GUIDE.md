@@ -92,8 +92,8 @@ DEV_SERVERS=(
 **Example:**
 ```bash
 DEV_SERVERS=(
-  "web:apps/web:pnpm --filter web dev --port {PORT}:10"
-  "api:apps/api:pnpm --filter api dev --port {PORT}:11"
+  "web:apps/web:dev --port {PORT}:10"
+  "api:apps/api:dev --port {PORT}:11"
   "worker:apps/worker:node index.js:12"
 )
 ```
@@ -102,6 +102,8 @@ DEV_SERVERS=(
 - `{PORT}` is a placeholder - hatch replaces it with actual port
 - `directory` is relative to project root
 - `port_offset` must be unique and ≥10 (0-9 reserved for docker)
+- **NEVER prefix commands with the package manager** (`yarn`, `pnpm`, `npm`, `bun`). Hatch's `_pkg_run` automatically prepends the package manager based on `PACKAGE_MANAGER`. Writing `yarn vite` in the command produces `yarn yarn vite` at runtime. Write the bare command instead (e.g., `vite`, `next dev`, `wrangler dev`).
+- For monorepos using yarn workspaces, use `workspace <pkg> <cmd>` (not `yarn workspace ...`). For pnpm, use `--filter <pkg> <cmd>` (not `pnpm --filter ...`).
 
 ---
 
@@ -363,8 +365,8 @@ DOCKER_EXTRAS="mailhog:8025,1025"
 
 # Development Servers
 DEV_SERVERS="
-  web:apps/web:pnpm dev --port {PORT}:10
-  api:apps/api:pnpm dev --port {PORT}:11
+  web:apps/web:dev --port {PORT}:10
+  api:apps/api:dev --port {PORT}:11
 "
 
 # Port Templates
