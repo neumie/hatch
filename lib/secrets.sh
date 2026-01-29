@@ -2,6 +2,71 @@
 # secrets.sh - Generic secret linking and port template injection
 # Depends on: core.sh, manifest.sh, ports.sh
 
+# hatch_write_secrets
+# Reads SECRETS from manifest. Format per entry: "file_path:KEY=value"
+# Creates files in the workspace with the specified key-value pairs.
+# If the file already exists, updates or appends the key.
+# This runs before hatch_link_secrets so that external secrets can override.
+hatch_write_secrets() {
+  if [[ -z "${SECRETS:-}" ]]; then
+    return 0
+  fi
+
+  _header "Writing secrets"
+
+  while IFS= read -r secret_spec; do
+    [[ -z "$secret_spec" ]] && continue
+
+    # Parse format: "file_path:KEY=value"
+    local file_path var_assignment
+    file_path=$(echo "$secret_spec" | cut -d: -f1)
+    var_assignment=$(echo "$secret_spec" | cut -d: -f2-)
+
+    local var_name var_value
+    var_name=$(echo "$var_assignment" | cut -d= -f1)
+    var_value=$(echo "$var_assignment" | cut -d= -f2-)
+
+    if [[ -f "$file_path" ]]; then
+      # Match both KEY=value and KEY = "value" (TOML style)
+      if grep -q "^${var_name}[[:space:]]*=" "$file_path" 2>/dev/null; then
+        local existing_line
+        existing_line=$(grep "^${var_name}[[:space:]]*=" "$file_path" | head -1)
+
+        if echo "$existing_line" | grep -q "^${var_name} = \""; then
+          _sed_i "s|^${var_name} = \".*\"|${var_name} = \"${var_value}\"|" "$file_path"
+        elif echo "$existing_line" | grep -q "^${var_name} = "; then
+          _sed_i "s|^${var_name} = .*|${var_name} = \"${var_value}\"|" "$file_path"
+        else
+          _sed_i "s|^${var_name}=.*|${var_name}=${var_value}|" "$file_path"
+        fi
+      else
+        case "$file_path" in
+          *.toml)
+            echo "${var_name} = \"${var_value}\"" >> "$file_path"
+            ;;
+          *)
+            echo "${var_name}=${var_value}" >> "$file_path"
+            ;;
+        esac
+      fi
+    else
+      local parent_dir
+      parent_dir=$(dirname "$file_path")
+      mkdir -p "$parent_dir"
+      case "$file_path" in
+        *.toml)
+          echo "${var_name} = \"${var_value}\"" > "$file_path"
+          ;;
+        *)
+          echo "${var_name}=${var_value}" > "$file_path"
+          ;;
+      esac
+    fi
+  done < <(_parse_services SECRETS)
+
+  _success "Secrets written"
+}
+
 # hatch_link_secrets
 # Reads PROJECT_NAME. Walks $HATCH_SECRETS/$PROJECT_NAME/ directory.
 # For each file found:
