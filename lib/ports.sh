@@ -28,7 +28,7 @@ _sanitize_var_name() {
 # Returns one entry per line via stdout
 _parse_services() {
   local var_name="$1"
-  local services="${!var_name}"
+  local services="${!var_name:-}"
 
   if [[ -n "$services" ]]; then
     # Process line by line: trim whitespace, skip empty lines and comments
@@ -308,7 +308,8 @@ hatch_generate_ports() {
 # _allocate_docker_service SERVICE_SPEC OFFSET LABEL
 # Allocates host ports for a Docker service spec (name:port or name:port1,port2)
 # Sets PORT_<name>, HATCH_PORT_<name>, and HATCH_PORTMAP_<name>_<cport> variables
-# Prints the new offset (offset + number_of_ports_consumed)
+# Sets _ALLOC_NEXT_OFFSET to (offset + number_of_ports_consumed)
+# IMPORTANT: Must be called directly (not via $(...)) so exports propagate
 _allocate_docker_service() {
   local service_spec="$1"
   local offset="$2"
@@ -339,13 +340,13 @@ _allocate_docker_service() {
   done
 
   if [[ $port_count -gt 1 ]]; then
-    _info "Allocated ports for $label '$service_name': $primary_port-$((primary_port + port_count - 1)) (container ports: $container_ports_str)" >&2
+    _info "Allocated ports for $label '$service_name': $primary_port-$((primary_port + port_count - 1)) (container ports: $container_ports_str)"
   else
-    _info "Allocated port for $label '$service_name': $primary_port (container port: $container_ports_str)" >&2
+    _info "Allocated port for $label '$service_name': $primary_port (container port: $container_ports_str)"
   fi
 
-  # Return new offset
-  echo $((offset + port_count))
+  # Return new offset via variable (not stdout, to avoid subshell)
+  _ALLOC_NEXT_OFFSET=$((offset + port_count))
 }
 
 # hatch_allocate_ports
@@ -365,13 +366,15 @@ hatch_allocate_ports() {
   # Process Docker services first
   while IFS= read -r service_spec; do
     [[ -z "$service_spec" ]] && continue
-    offset=$(_allocate_docker_service "$service_spec" "$offset" "docker service")
+    _allocate_docker_service "$service_spec" "$offset" "docker service"
+    offset=$_ALLOC_NEXT_OFFSET
   done < <(_parse_services DOCKER_SERVICES)
 
   # Process Docker extras (continue offset sequence)
   while IFS= read -r service_spec; do
     [[ -z "$service_spec" ]] && continue
-    offset=$(_allocate_docker_service "$service_spec" "$offset" "docker extra")
+    _allocate_docker_service "$service_spec" "$offset" "docker extra"
+    offset=$_ALLOC_NEXT_OFFSET
   done < <(_parse_services DOCKER_EXTRAS)
 
   # Process dev servers (use their declared port_offset)
@@ -407,7 +410,7 @@ hatch_resolve_port() {
   local safe_name
   safe_name=$(_sanitize_var_name "$service_name")
   local var_name="HATCH_PORT_${safe_name}"
-  local port="${!var_name}"
+  local port="${!var_name:-}"
 
   if [[ -z "$port" ]]; then
     _warn "No port allocated for service: $service_name"
