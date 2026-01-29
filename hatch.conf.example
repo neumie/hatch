@@ -94,6 +94,12 @@ DOCKER_EXTRAS="
 #   - Django: "python manage.py runserver {PORT}"
 #   - Rails: "rails server -p {PORT}"
 #
+# WARNING: When delegating to a package.json script via a package manager
+# (e.g., "yarn workspace @scope/pkg dev --port {PORT}"), the extra arguments
+# are APPENDED to the script's existing command. Do NOT duplicate flags that
+# the script already includes (e.g., --env local). Many CLIs reject duplicate
+# single-value flags. Always check the target package.json "scripts" entry.
+#
 DEV_SERVERS="
   web:apps/web:pnpm --filter web dev -p {PORT}:10
   api:apps/api:pnpm --filter api start:dev:11
