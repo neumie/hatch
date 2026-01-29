@@ -59,12 +59,21 @@ _emit_docker_env() {
       var_value=$(echo "$env_assignment" | cut -d= -f2-)
 
       # Resolve {PORT_*} to ${PORT_*} for Docker Compose interpolation
-      while [[ "$var_value" =~ \{PORT_([^}]+)\} ]]; do
+      # Build sed expression for all matches in one pass to avoid infinite loop
+      # (replacing {PORT_x} with ${PORT_x} would re-match the {PORT_x} substring)
+      local sed_expr=""
+      local tmp_value="$var_value"
+      while [[ "$tmp_value" =~ \{PORT_([^}]+)\} ]]; do
         local port_service="${BASH_REMATCH[1]}"
         local port_safe
         port_safe=$(_sanitize_var_name "$port_service")
-        var_value=$(echo "$var_value" | sed "s/{PORT_${port_service}}/\${PORT_${port_safe}}/g")
+        sed_expr="${sed_expr}s/{PORT_${port_service}}/\${PORT_${port_safe}}/g;"
+        # Remove the matched portion to find additional patterns
+        tmp_value="${tmp_value#*\}}"
       done
+      if [[ -n "$sed_expr" ]]; then
+        var_value=$(echo "$var_value" | sed "$sed_expr")
+      fi
 
       echo "      ${var_name}: \"${var_value}\""
     fi
