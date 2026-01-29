@@ -3,6 +3,7 @@
 # Sources: manifest, docker, process
 
 source "$HATCH_LIB/manifest.sh"
+source "$HATCH_LIB/ports.sh"
 source "$HATCH_LIB/docker.sh"
 source "$HATCH_LIB/process.sh"
 
@@ -75,6 +76,9 @@ if command -v docker >/dev/null 2>&1; then
   fi
   echo ""
 fi
+
+# Release port registry entry
+_port_registry_release "$WORKSPACE_NAME" 2>/dev/null || true
 
 # Clean up generated files
 _info "Cleaning up generated files"

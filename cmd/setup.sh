@@ -36,19 +36,19 @@ hatch_generate_ports "$WORKSPACE_NAME" "$PROJECT_NAME"
 hatch_allocate_ports
 echo ""
 
-# Check port availability (skip if Docker already running)
+# Check port availability (always check, tolerate own containers)
 DOCKER_RUNNING=false
 if hatch_docker_running; then
   _info "Docker services already running for this workspace"
   DOCKER_RUNNING=true
-else
-  _info "Checking port availability..."
-  if ! hatch_check_ports; then
-    _error "Port conflicts detected. Options:"
-    _error "  1. Stop conflicting services"
-    _error "  2. Archive conflicting workspace: hatch archive"
-    exit 1
-  fi
+fi
+
+_info "Checking port availability..."
+if ! hatch_check_ports_smart "$WORKSPACE_NAME"; then
+  _error "Port conflicts detected. Options:"
+  _error "  1. Stop conflicting services"
+  _error "  2. Archive conflicting workspace: hatch archive"
+  exit 1
 fi
 
 # Write configuration files

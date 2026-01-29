@@ -24,6 +24,15 @@ hatch_write_env() {
         echo "PORT_${service_name}=${var_value}"
       fi
     done < <(env | grep '^HATCH_PORT_' | sort)
+
+    # Export per-container-port mappings (HATCH_PORTMAP_* -> PORTMAP_*)
+    echo ""
+    echo "# Per-container-port mappings"
+    while IFS='=' read -r var_name var_value; do
+      if [[ "$var_name" =~ ^HATCH_PORTMAP_ ]]; then
+        echo "${var_name#HATCH_}=${var_value}"
+      fi
+    done < <(env | grep '^HATCH_PORTMAP_' | sort)
   } > "$env_file"
 
   _success "Created $env_file"
@@ -111,10 +120,10 @@ hatch_write_docker_override() {
       echo "    container_name: \${WORKSPACE_NAME}-${service_name}"
       echo "    ports: !override"
 
-      # Handle multiple ports (comma-separated)
+      # Each container port maps to its own host port via PORTMAP variable
       IFS=',' read -ra ports <<< "$container_ports"
       for container_port in "${ports[@]}"; do
-        echo "      - \"\${PORT_${safe_name}}:${container_port}\""
+        echo "      - \"\${PORTMAP_${safe_name}_${container_port}}:${container_port}\""
       done
 
       # Emit environment overrides if configured
@@ -136,10 +145,10 @@ hatch_write_docker_override() {
       echo "    container_name: \${WORKSPACE_NAME}-${service_name}"
       echo "    ports: !override"
 
-      # Handle multiple ports (comma-separated)
+      # Each container port maps to its own host port via PORTMAP variable
       IFS=',' read -ra ports <<< "$container_ports"
       for container_port in "${ports[@]}"; do
-        echo "      - \"\${PORT_${safe_name}}:${container_port}\""
+        echo "      - \"\${PORTMAP_${safe_name}_${container_port}}:${container_port}\""
       done
 
       # Emit environment overrides if configured
@@ -155,6 +164,7 @@ hatch_write_docker_override() {
 
 # hatch_docker_up
 # Starts Docker Compose services in detached mode
+# If startup fails with a port conflict, tears down and retries once
 hatch_docker_up() {
   _header "Starting Docker services"
 
@@ -167,13 +177,66 @@ hatch_docker_up() {
     _die "Docker daemon is not running. Start Docker Desktop or the Docker service."
   fi
 
-  # Run docker compose up
-  if docker compose up --detach; then
+  # Run docker compose up, capturing stderr for error analysis
+  local compose_output
+  if compose_output=$(docker compose up --detach 2>&1); then
+    [[ -n "$compose_output" ]] && echo "$compose_output"
     _success "Docker services started"
     return 0
-  else
-    _die "Failed to start Docker services"
   fi
+
+  # Check if failure was a port conflict
+  if echo "$compose_output" | grep -qiE "port is already allocated|address already in use|Bind for .* failed"; then
+    _warn "Port conflict detected during startup. Cleaning up and retrying..."
+
+    # Extract and report the specific conflicting port
+    local conflicting_port
+    conflicting_port=$(echo "$compose_output" | grep -oE "Bind for 0\.0\.0\.0:[0-9]+" | head -1 | grep -oE "[0-9]+$")
+    if [[ -n "$conflicting_port" ]]; then
+      _error "Conflict on port: $conflicting_port"
+      _report_port_user "$conflicting_port"
+    fi
+
+    # Tear down any partially-started containers
+    docker compose down --timeout 5 2>/dev/null || true
+
+    # Clean stale registry entries
+    _port_registry_clean 2>/dev/null || true
+
+    # Brief pause to allow ports to be released after teardown
+    sleep 1
+
+    # Re-check port availability and report conflicts
+    _info "Checking for external port conflicts..."
+    local has_external_conflict=0
+    while IFS='=' read -r var_name var_value; do
+      if [[ "$var_name" =~ ^HATCH_PORTMAP_ ]]; then
+        if _check_port "$var_value"; then
+          local label=${var_name#HATCH_PORTMAP_}
+          _error "Port $var_value ($label) is still in use"
+          _report_port_user "$var_value"
+          has_external_conflict=1
+        fi
+      fi
+    done < <(env | grep '^HATCH_PORTMAP_')
+
+    if [[ $has_external_conflict -eq 1 ]]; then
+      _die "External port conflicts remain. Stop the conflicting services or use a different workspace name."
+    fi
+
+    # Retry once after cleanup
+    _info "Retrying docker compose up..."
+    if docker compose up --detach; then
+      _success "Docker services started (after retry)"
+      return 0
+    else
+      _die "Failed to start Docker services"
+    fi
+  fi
+
+  # Non-port-related failure
+  echo "$compose_output" >&2
+  _die "Failed to start Docker services"
 }
 
 # hatch_docker_down
