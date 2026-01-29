@@ -119,19 +119,35 @@ hatch_inject_ports() {
       resolved_value=$(echo "$resolved_value" | sed "s/{PORT_${service_name}}/${port}/g")
     done
 
-    # Build the final line to inject
-    local final_line="${var_name}=${resolved_value}"
-
     # Check if file exists
     if [[ -f "$file_path" ]]; then
-      # Check if line with var_name exists
-      if grep -q "^${var_name}=" "$file_path" 2>/dev/null; then
-        # Update existing line
-        _sed_i "s|^${var_name}=.*|${final_line}|" "$file_path"
+      # Match both KEY=value and KEY = "value" (TOML style with optional spaces/quotes)
+      if grep -q "^${var_name}[[:space:]]*=" "$file_path" 2>/dev/null; then
+        # Detect existing style: TOML uses spaces around = and quotes
+        local existing_line
+        existing_line=$(grep "^${var_name}[[:space:]]*=" "$file_path" | head -1)
+
+        if echo "$existing_line" | grep -q "^${var_name} = \""; then
+          # TOML style: KEY = "value"
+          _sed_i "s|^${var_name} = \".*\"|${var_name} = \"${resolved_value}\"|" "$file_path"
+        elif echo "$existing_line" | grep -q "^${var_name} = "; then
+          # TOML style without quotes: KEY = value
+          _sed_i "s|^${var_name} = .*|${var_name} = \"${resolved_value}\"|" "$file_path"
+        else
+          # .env style: KEY=value or KEY="value"
+          _sed_i "s|^${var_name}=.*|${var_name}=${resolved_value}|" "$file_path"
+        fi
         _info "Updated $var_name in $file_path"
       else
-        # Append new line
-        echo "$final_line" >> "$file_path"
+        # Append in the style matching the file extension
+        case "$file_path" in
+          *.toml)
+            echo "${var_name} = \"${resolved_value}\"" >> "$file_path"
+            ;;
+          *)
+            echo "${var_name}=${resolved_value}" >> "$file_path"
+            ;;
+        esac
         _info "Appended $var_name to $file_path"
       fi
     else
@@ -139,7 +155,14 @@ hatch_inject_ports() {
       local parent_dir
       parent_dir=$(dirname "$file_path")
       mkdir -p "$parent_dir"
-      echo "$final_line" > "$file_path"
+      case "$file_path" in
+        *.toml)
+          echo "${var_name} = \"${resolved_value}\"" > "$file_path"
+          ;;
+        *)
+          echo "${var_name}=${resolved_value}" > "$file_path"
+          ;;
+      esac
       _info "Created $file_path with $var_name"
     fi
   done < <(_parse_services PORT_TEMPLATES)
