@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Resolve HATCH_HOME (handle symlinks)
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+while [ -h "$SCRIPT_PATH" ]; do
+  SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
+  SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
+  [[ $SCRIPT_PATH != /* ]] && SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_PATH"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
+export HATCH_HOME="$(cd -P "$SCRIPT_DIR/.." && pwd)"
+
+# Source core utilities
+source "$HATCH_HOME/lib/core.sh"
+
+# Parse command
+COMMAND="${1:-}"
+if [ -n "$COMMAND" ]; then
+  shift
+fi
+
+# Dispatch to command handler
+case "$COMMAND" in
+  setup|run|stop|status|logs|open|db|migrate|export|archive|init|doctor|update|help)
+    source "$HATCH_HOME/cmd/${COMMAND}.sh"
+    ;;
+  "")
+    source "$HATCH_HOME/cmd/help.sh"
+    ;;
+  *)
+    echo "Unknown command: $COMMAND" >&2
+    echo ""
+    source "$HATCH_HOME/cmd/help.sh"
+    exit 1
+    ;;
+esac
