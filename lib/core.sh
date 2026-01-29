@@ -126,6 +126,98 @@ _report_port_user() {
   _error "  -> Could not identify what is using port $port"
 }
 
+# _kill_conflicting_ports WORKSPACE_NAME
+# Kills processes on ports that conflict with allocated hatch ports,
+# skipping ports owned by this workspace's Docker containers.
+_kill_conflicting_ports() {
+  local workspace_name="$1"
+  local killed=0
+
+  # Collect all allocated ports (deduplicated)
+  local ports=()
+  local checked=""
+  while IFS='=' read -r var_name var_value; do
+    ports+=("$var_value")
+    checked="${checked}:${var_value}:"
+  done < <(env | grep '^HATCH_PORTMAP_' | sort)
+  while IFS='=' read -r var_name var_value; do
+    if [[ "$checked" == *":${var_value}:"* ]]; then
+      continue
+    fi
+    ports+=("$var_value")
+    checked="${checked}:${var_value}:"
+  done < <(env | grep '^HATCH_PORT_' | sort)
+
+  for port in "${ports[@]}"; do
+    # Port is free, nothing to kill
+    if ! _check_port "$port"; then
+      continue
+    fi
+    # Skip ports owned by our own workspace containers
+    if _port_owned_by_workspace "$port" "$workspace_name" 2>/dev/null; then
+      continue
+    fi
+    # Try to get the PID via lsof
+    if command -v lsof >/dev/null 2>&1; then
+      local pid
+      pid=$(lsof -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null | head -1)
+      if [[ -n "$pid" ]]; then
+        _info "Killing PID $pid on port $port"
+        kill "$pid" 2>/dev/null && sleep 0.5 || kill -9 "$pid" 2>/dev/null || true
+        killed=$((killed + 1))
+        continue
+      fi
+    fi
+    _warn "Could not find PID for port $port, skipping"
+  done
+
+  if [[ $killed -gt 0 ]]; then
+    # Give processes a moment to release ports
+    sleep 1
+    _success "Killed $killed conflicting process(es)"
+  fi
+}
+
+# _find_conflicting_workspaces WORKSPACE_NAME
+# Prints the names of other workspaces whose port ranges overlap with
+# the current workspace's allocated ports. Returns 1 if none found.
+_find_conflicting_workspaces() {
+  local workspace_name="$1"
+  local registry="${HATCH_HOME:-$HOME/.hatch}/port-registry"
+  local found=()
+
+  [[ -f "$registry" ]] || return 1
+
+  # Collect all allocated ports for the current workspace
+  local ports=()
+  while IFS='=' read -r _ var_value; do
+    ports+=("$var_value")
+  done < <(env | grep '^HATCH_PORTMAP_\|^HATCH_PORT_' | sort)
+
+  for port in "${ports[@]}"; do
+    # Port is free, no conflict
+    ! _check_port "$port" && continue
+
+    while IFS=$'\t' read -r reg_port reg_workspace _ _ _; do
+      [[ "$reg_workspace" == "$workspace_name" ]] && continue
+      local reg_end=$((reg_port + ${HATCH_PORT_SPACING:-20}))
+      if [[ "$port" -ge "$reg_port" ]] && [[ "$port" -lt "$reg_end" ]]; then
+        # Deduplicate
+        local already=false
+        for f in "${found[@]+"${found[@]}"}"; do
+          [[ "$f" == "$reg_workspace" ]] && already=true && break
+        done
+        $already || found+=("$reg_workspace")
+      fi
+    done < "$registry"
+  done
+
+  if [[ ${#found[@]} -eq 0 ]]; then
+    return 1
+  fi
+  printf '%s\n' "${found[@]}"
+}
+
 # Docker host hostname for container-to-host communication
 _docker_host() {
   if [[ "$HATCH_PLATFORM" == "darwin" ]]; then
