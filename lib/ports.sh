@@ -10,7 +10,7 @@
 # Converts a service name to a valid bash variable name
 # Replaces hyphens and dots with underscores
 _sanitize_var_name() {
-  echo "$1" | tr '-.' '__'
+  echo "$1" | tr -- '-.' '__'
 }
 
 # _parse_services VAR_NAME
