@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# archive.sh - Clean up workspace
-# Sources: manifest, docker, process
+# down.sh - Tear down workspace infrastructure
+# Sources: manifest, docker, process, ports
 
 source "$HATCH_LIB/manifest.sh"
 source "$HATCH_LIB/ports.sh"
@@ -22,7 +22,7 @@ WORKSPACE_NAME=$(hatch_resolve_workspace)
 # Try to load manifest, but don't fail if it doesn't exist
 hatch_load_manifest "$PROJECT_NAME" 2>/dev/null || true
 
-_header "Archive Workspace"
+_header "Tear Down Workspace"
 _info "Workspace: $WORKSPACE_NAME"
 _info "Directory: $(pwd)"
 echo ""
@@ -56,18 +56,18 @@ if [[ -f .hatch/pids ]]; then
   echo ""
 fi
 
-# Stop Docker services
+# Stop Docker services and remove containers + volumes
 if command -v docker >/dev/null 2>&1; then
   _info "Stopping Docker services"
   docker compose -p "$WORKSPACE_NAME" down -v --remove-orphans 2>&1 || true
-  
+
   # Force remove any remaining containers
   CONTAINERS=$(docker ps -aq --filter "name=${WORKSPACE_NAME}-" 2>/dev/null)
   if [[ -n "$CONTAINERS" ]]; then
     _info "Removing containers"
     echo "$CONTAINERS" | xargs docker rm -f 2>/dev/null || true
   fi
-  
+
   # Remove volumes
   VOLUMES=$(docker volume ls -q --filter "name=${WORKSPACE_NAME}" 2>/dev/null)
   if [[ -n "$VOLUMES" ]]; then
@@ -80,20 +80,10 @@ fi
 # Release port registry entry
 _port_registry_release "$WORKSPACE_NAME" 2>/dev/null || true
 
-# Clean up generated files
-_info "Cleaning up generated files"
-rm -rf .hatch/ 2>/dev/null && echo "  Removed .hatch/"
-rm -f docker-compose.override.yaml 2>/dev/null && echo "  Removed docker-compose.override.yaml"
-rm -f .env 2>/dev/null && echo "  Removed .env"
-rm -f import-data.jsonl.gz 2>/dev/null && echo "  Removed import-data.jsonl.gz"
-
-# Show node_modules size
-if [[ -d "node_modules" ]]; then
-  echo ""
-  SIZE=$(du -sh node_modules 2>/dev/null | cut -f1)
-  _info "node_modules exists ($SIZE)"
-  echo "  Remove with: rm -rf node_modules"
-fi
+# Clean up runtime state only
+_info "Cleaning up runtime state"
+rm -f .hatch/pids 2>/dev/null && echo "  Removed .hatch/pids"
+rm -f .hatch/*.log 2>/dev/null && echo "  Removed .hatch/*.log"
 
 echo ""
-_success "Archive complete"
+_success "Tear down complete"

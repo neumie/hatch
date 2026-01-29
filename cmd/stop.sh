@@ -7,5 +7,5 @@ source "$HATCH_LIB/docker.sh"
 # Stop dev servers first (if any running)
 hatch_stop_servers
 
-# Stop Docker services
-hatch_docker_down
+# Stop Docker services (keeps containers and volumes)
+hatch_docker_stop

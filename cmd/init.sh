@@ -113,7 +113,7 @@ DOCKER_EXTRAS="
   # adminer:8080
 "
 
-# Development servers started by 'hatch run'
+# Development servers started by 'hatch up'
 # Format: "name:directory:command:port_offset"
 # Use {PORT} placeholder for dynamic port in command
 DEV_SERVERS="

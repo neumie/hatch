@@ -239,8 +239,27 @@ hatch_docker_up() {
   _die "Failed to start Docker services"
 }
 
+# hatch_docker_stop
+# Stops Docker Compose services without removing containers or volumes
+hatch_docker_stop() {
+  _header "Stopping Docker services"
+
+  if ! command -v docker >/dev/null 2>&1; then
+    _warn "Docker not found, skipping"
+    return 0
+  fi
+
+  if docker compose stop; then
+    _success "Docker services stopped"
+    return 0
+  else
+    _error "Failed to stop Docker services"
+    return 1
+  fi
+}
+
 # hatch_docker_down
-# Stops Docker Compose services
+# Stops and removes Docker Compose services
 hatch_docker_down() {
   _header "Stopping Docker services"
 

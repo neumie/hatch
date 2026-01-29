@@ -9,8 +9,9 @@ USAGE:
 
 COMMANDS:
   setup              Set up project (install deps, start docker, run migrations)
-  run [services...]  Start dev servers (use 'hatch stop' to shut down)
-  stop               Stop all services (dev servers + Docker)
+  up [services...]   Start dev servers (use 'hatch stop' to pause)
+  stop               Stop all services (dev servers + Docker, keeps containers)
+  down [--force]     Tear down workspace (remove containers, volumes, release ports)
   status             Show status of Docker and dev servers
   logs [services...] View Docker service logs (all or specific services)
   open [service]     Open service URL in browser
@@ -26,7 +27,7 @@ COMMANDS:
   migrate amend      Amend latest migration (if supported)
   
   export             Export project data to fixtures
-  archive [--force]  Clean up workspace (remove containers, volumes, files)
+  seed               Copy secret files to ~/.hatch/secrets for cross-worktree sharing
   
   init               Initialize hatch.conf for current project
   doctor             Check system dependencies
@@ -35,13 +36,14 @@ COMMANDS:
 
 EXAMPLES:
   hatch setup                    # Full project setup
-  hatch run                      # Start all dev servers
-  hatch run admin scan           # Start only admin and scan servers
+  hatch up                       # Start all dev servers
+  hatch up admin scan            # Start only admin and scan servers
   hatch status                   # Check what's running
   hatch open admin               # Open admin in browser
   hatch db shell                 # Connect to database
   hatch migrate execute          # Run migrations
-  hatch archive                  # Clean up workspace
+  hatch down                     # Tear down workspace
+  hatch seed                     # Seed secrets for worktrees
 
 CONFIGURATION:
   Hatch looks for configuration in:

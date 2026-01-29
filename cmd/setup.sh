@@ -80,8 +80,8 @@ if ! hatch_check_ports_smart "$WORKSPACE_NAME"; then
           echo "  - $ws"
         done
         echo ""
-        _info "To archive a conflicting workspace, cd into its directory and run:"
-        echo "  hatch archive"
+        _info "To tear down a conflicting workspace, cd into its directory and run:"
+        echo "  hatch down"
       fi
       _error "Aborted."
       exit 1
@@ -197,4 +197,4 @@ done < <(_parse_services DOCKER_SERVICES; _parse_services DOCKER_EXTRAS)
 
 echo ""
 echo "To start dev servers, run:"
-echo "  hatch run"
+echo "  hatch up"

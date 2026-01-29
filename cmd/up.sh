@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run.sh - Start dev servers in background
+# up.sh - Start dev servers in background
 # Sources: manifest, ports, process
 
 source "$HATCH_LIB/manifest.sh"
@@ -19,5 +19,5 @@ hatch_allocate_ports
 hatch_start_servers "$@"
 
 if [[ -s .hatch/pids ]]; then
-  _info "Servers running in background. Use 'hatch stop' to shut down."
+  _info "Servers running in background. Use 'hatch stop' to pause, 'hatch down' to tear down."
 fi
