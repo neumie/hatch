@@ -104,6 +104,8 @@ DEV_SERVERS=(
 - `port_offset` must be unique and ≥10 (0-9 reserved for docker)
 - **NEVER prefix commands with the package manager** (`yarn`, `pnpm`, `npm`, `bun`). Hatch's `_pkg_run` automatically prepends the package manager based on `PACKAGE_MANAGER`. Writing `yarn vite` in the command produces `yarn yarn vite` at runtime. Write the bare command instead (e.g., `vite`, `next dev`, `wrangler dev`).
 - For monorepos using yarn workspaces, use `workspace <pkg> <cmd>` (not `yarn workspace ...`). For pnpm, use `--filter <pkg> <cmd>` (not `pnpm --filter ...`).
+- **CRITICAL — avoid duplicate flags when delegating to package.json scripts:**
+  When the command delegates to a package.json script (e.g., `workspace @scope/worker dev --port {PORT}`), the extra arguments are **appended** to whatever the `dev` script already contains. If `package.json` defines `"dev": "wrangler dev --env local ..."`, do NOT also pass `--env local` in the hatch.conf command — many CLIs (including wrangler) reject duplicate single-value flags with an error like `expects a single value, but received multiple`. Always read the target package.json `scripts` before writing the DEV_SERVERS entry to avoid passing the same flag twice. Only add flags in hatch.conf that are NOT already in the underlying script (like `--port {PORT}`).
 
 ---
 
@@ -409,6 +411,7 @@ HOOKS_FILE="hatch.hooks.sh"
 - [ ] Migration tool is valid or "none"
 - [ ] Setup steps are in logical order
 - [ ] MCP env vars use `{PORT_servicename}` for any localhost URLs
+- [ ] DEV_SERVERS commands that delegate to package.json scripts do not duplicate flags already in the script (read the target `scripts.dev` entry first)
 
 **If uncertain about any value, add a comment:**
 ```bash
@@ -426,5 +429,6 @@ MIGRATE_EXECUTE_CMD="npm run migrate"
 4. **Port conflicts**: Ensure no two services use the same port offset
 5. **Test your output**: The generated config should be syntactically valid bash
 6. **Be explicit**: Comment anything that requires manual verification
+7. **Check package.json scripts for existing flags**: When DEV_SERVERS uses a package manager workspace command (e.g., `yarn workspace @scope/pkg dev`), read the target package's `scripts.dev` entry. Only add flags in hatch.conf that aren't already in the script. Duplicating flags like `--env` causes CLI tools to fail.
 
 When complete, output the full `hatch.conf` file.
