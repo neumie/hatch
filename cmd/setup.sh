@@ -45,10 +45,52 @@ fi
 
 _info "Checking port availability..."
 if ! hatch_check_ports_smart "$WORKSPACE_NAME"; then
-  _error "Port conflicts detected. Options:"
-  _error "  1. Stop conflicting services"
-  _error "  2. Archive conflicting workspace: hatch archive"
-  exit 1
+  echo ""
+  _warn "Port conflicts detected. Choose an option:"
+  echo "  1) Kill conflicting processes and continue"
+  # Identify conflicting workspaces to show a useful option 2
+  _conflicting_ws=""
+  if _conflicting_ws=$(_find_conflicting_workspaces "$WORKSPACE_NAME" 2>/dev/null); then
+    echo "  2) Show conflicting workspace info and abort"
+  else
+    echo "  2) Abort"
+  fi
+  echo ""
+  if [[ -t 0 ]]; then
+    read -p "Option [1/2]: " _port_choice
+  else
+    _error "Non-interactive shell, cannot prompt. Aborting."
+    exit 1
+  fi
+  case "${_port_choice}" in
+    1)
+      _info "Killing conflicting processes..."
+      _kill_conflicting_ports "$WORKSPACE_NAME"
+      # Re-check after killing
+      if ! hatch_check_ports_smart "$WORKSPACE_NAME"; then
+        _error "Some port conflicts remain after killing processes. Aborting."
+        exit 1
+      fi
+      ;;
+    2)
+      if [[ -n "$_conflicting_ws" ]]; then
+        echo ""
+        _info "Conflicting workspace(s):"
+        echo "$_conflicting_ws" | while read -r ws; do
+          echo "  - $ws"
+        done
+        echo ""
+        _info "To archive a conflicting workspace, cd into its directory and run:"
+        echo "  hatch archive"
+      fi
+      _error "Aborted."
+      exit 1
+      ;;
+    *)
+      _error "Aborted."
+      exit 1
+      ;;
+  esac
 fi
 
 # Write configuration files
