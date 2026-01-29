@@ -107,6 +107,9 @@ hatch_inject_ports
 hatch_generate_mcp_config
 echo ""
 
+# Load hooks before setup steps (custom steps and data import may use hook functions)
+hatch_load_hooks
+
 # Execute SETUP_STEPS in order
 _header "Executing setup steps"
 
@@ -157,8 +160,7 @@ done
 
 echo ""
 
-# Load and call post_setup hook if exists
-hatch_load_hooks
+# Call post_setup hook if exists (hooks already loaded above)
 if type post_setup &>/dev/null; then
   _info "Running post_setup hook"
   post_setup
