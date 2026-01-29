@@ -376,7 +376,7 @@ HOOKS_FILE="hatch.hooks.sh"
 # 2. Run `hatch setup` to initialize the project
 #    This will execute all SETUP_STEPS
 #
-# 3. Run `hatch run` to start all dev servers
+# 3. Run `hatch up` to start all dev servers
 #    Servers will run on BASE_PORT + their port_offset
 #
 # 4. Run `hatch stop` to gracefully stop everything

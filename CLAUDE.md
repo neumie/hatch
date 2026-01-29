@@ -21,7 +21,7 @@ Hatch is a workspace-isolated development environment manager for full-stack app
 - `mcp.sh` — generates workspace-scoped MCP server config in `~/.claude.json`
 - `data.sh` — data import/export with versioning
 
-**Command layer** (`cmd/`): Each command is a standalone script sourced by `bin/hatch`. Key commands: `setup.sh` (full orchestration), `init.sh` (generate hatch.conf), `run.sh` / `stop.sh` (dev servers), `status.sh`, `db.sh`, `migrate.sh`, `doctor.sh`, `archive.sh`.
+**Command layer** (`cmd/`): Each command is a standalone script sourced by `bin/hatch`. Key commands: `setup.sh` (full orchestration), `init.sh` (generate hatch.conf), `seed.sh` (populate shared secrets), `up.sh` / `stop.sh` / `down.sh` (dev server lifecycle), `status.sh`, `db.sh`, `migrate.sh`, `doctor.sh`.
 
 **Configuration**: Projects define a `hatch.conf` file (bash-sourced) with multi-value string fields parsed internally. See `hatch.conf.example` for the full schema.
 
