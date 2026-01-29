@@ -36,10 +36,6 @@ Hatch is a workspace-isolated development environment manager for full-stack app
 - Platform-specific operations use wrapper functions in `core.sh` (e.g., `_sed_i`, `_md5`, `_is_port_open`, `_open_url`)
 - ShellCheck directives are used inline for static analysis
 
-## AI Setup Guide
-
-`AI_SETUP_GUIDE.md` contains a comprehensive 10-step guide for analyzing projects and generating valid `hatch.conf` files. This is the primary reference when working with `hatch init` or writing configuration for new projects.
-
 ## No Build/Test/Lint
 
 This is a pure bash tool with no build step, test runner, or linter configuration. Changes are validated manually and via ShellCheck. The install process clones the repo to `~/.hatch` and symlinks `bin/hatch` to PATH.
