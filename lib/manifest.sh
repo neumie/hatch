@@ -47,8 +47,9 @@ hatch_resolve_workspace() {
 # hatch_load_manifest [project_name]
 # Searches for and sources hatch.conf, then validates required fields
 # Search order:
-#   1. ./hatch.conf (project root)
-#   2. $HATCH_PROJECTS/{project_name}.conf (user local config)
+#   1. ./.hatch/hatch.conf (project .hatch directory)
+#   2. ./hatch.conf (project root - legacy)
+#   3. $HATCH_PROJECTS/{project_name}.conf (user local config)
 # Dies with helpful message if not found or validation fails
 hatch_load_manifest() {
   local project_name="${1:-}"
@@ -60,12 +61,14 @@ hatch_load_manifest() {
   fi
 
   # Search for manifest in order
-  if [[ -f "./hatch.conf" ]]; then
+  if [[ -f "./.hatch/hatch.conf" ]]; then
+    manifest_file="./.hatch/hatch.conf"
+  elif [[ -f "./hatch.conf" ]]; then
     manifest_file="./hatch.conf"
   elif [[ -f "$HATCH_PROJECTS/${project_name}.conf" ]]; then
     manifest_file="$HATCH_PROJECTS/${project_name}.conf"
   else
-    _die "No hatch.conf found. Searched:\n  - ./hatch.conf\n  - $HATCH_PROJECTS/${project_name}.conf\n\nRun 'hatch init' to create one."
+    _die "No hatch.conf found. Searched:\n  - ./.hatch/hatch.conf\n  - ./hatch.conf\n  - $HATCH_PROJECTS/${project_name}.conf\n\nRun 'hatch init' to create one."
   fi
 
   _info "Loading manifest: $manifest_file"
@@ -87,12 +90,14 @@ hatch_load_manifest() {
   SETUP_STEPS="${SETUP_STEPS:-docker:up}"
   DEFAULT_BASE_PORT="${DEFAULT_BASE_PORT:-1481}"
   HOOKS_FILE="${HOOKS_FILE:-hatch.hooks.sh}"
+  DOCKER_ENV="${DOCKER_ENV:-}"
 
   # Export key variables for use in subshells
   export PROJECT_NAME
   export PACKAGE_MANAGER
   export DOCKER_SERVICES
   export DOCKER_EXTRAS
+  export DOCKER_ENV
   export DEV_SERVERS
   export SETUP_STEPS
   export DEFAULT_BASE_PORT
@@ -104,8 +109,9 @@ hatch_load_manifest() {
 # hatch_load_hooks
 # Loads the hooks file if it exists
 # Search order:
-#   1. ./$(basename $HOOKS_FILE) (project root)
-#   2. $HATCH_PROJECTS/{project_name}.hooks.sh (user local config)
+#   1. ./.hatch/$(basename $HOOKS_FILE) (project .hatch directory)
+#   2. ./$(basename $HOOKS_FILE) (project root - legacy)
+#   3. $HATCH_PROJECTS/{project_name}.hooks.sh (user local config)
 # Does nothing if not found
 hatch_load_hooks() {
   local project_name="${PROJECT_NAME:-}"
@@ -119,7 +125,9 @@ hatch_load_hooks() {
   hooks_basename=$(basename "${HOOKS_FILE:-hatch.hooks.sh}")
 
   # Search for hooks file in order
-  if [[ -f "./$hooks_basename" ]]; then
+  if [[ -f "./.hatch/$hooks_basename" ]]; then
+    hooks_file="./.hatch/$hooks_basename"
+  elif [[ -f "./$hooks_basename" ]]; then
     hooks_file="./$hooks_basename"
   elif [[ -f "$HATCH_PROJECTS/${project_name}.hooks.sh" ]]; then
     hooks_file="$HATCH_PROJECTS/${project_name}.hooks.sh"

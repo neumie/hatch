@@ -71,24 +71,28 @@ hatch_import_data() {
   # Default: Contember-specific import logic
   _info "Using Contember import (default)"
 
-  # Get Contember engine port
+  # Get Contember engine port - try common service names
   local engine_port
-  engine_port=$(hatch_resolve_port "engine") || engine_port="${PORT_engine:-1481}"
+  engine_port=$(hatch_resolve_port "contember-engine" 2>/dev/null) || \
+    engine_port=$(hatch_resolve_port "engine" 2>/dev/null) || \
+    engine_port="${PORT_contember_engine:-${PORT_engine:-1481}}"
 
   # Get API token
   local api_token="${CONTEMBER_API_TOKEN:-0000000000000000000000000000000000000000}"
 
-  # Import via HTTP POST
+  # Import via HTTP POST (gzipped NDJSON upload)
   _info "Importing to http://localhost:$engine_port/import"
 
-  if ! curl -s -X POST \
+  if ! curl -s --fail -X POST \
     -H "Authorization: Bearer $api_token" \
-    -H "Content-Type: application/json" \
-    --data-binary "@$export_file" \
-    "http://localhost:$engine_port/import" > /dev/null; then
+    -H "Content-Type: application/x-ndjson" \
+    -H "Content-Encoding: gzip" \
+    -T "$export_file" \
+    "http://localhost:$engine_port/import"; then
     _error "Import failed"
     return 1
   fi
+  echo ""
 
   _success "Data import complete"
 

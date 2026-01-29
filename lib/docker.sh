@@ -29,9 +29,51 @@ hatch_write_env() {
   _success "Created $env_file"
 }
 
+# _emit_docker_env SERVICE_NAME
+# Checks DOCKER_ENV for entries matching this service and emits environment: block
+# Format: "service_name:VAR=value_with_{PORT_*}_placeholders"
+# Resolves {PORT_*} to ${PORT_*} for Docker Compose .env interpolation
+_emit_docker_env() {
+  local target_service="$1"
+  local has_env=0
+
+  if [[ -z "${DOCKER_ENV:-}" ]]; then
+    return
+  fi
+
+  while IFS= read -r env_spec; do
+    [[ -z "$env_spec" ]] && continue
+
+    local svc_name env_assignment
+    svc_name=$(echo "$env_spec" | cut -d: -f1)
+    env_assignment=$(echo "$env_spec" | cut -d: -f2-)
+
+    if [[ "$svc_name" == "$target_service" ]]; then
+      if [[ $has_env -eq 0 ]]; then
+        echo "    environment:"
+        has_env=1
+      fi
+
+      local var_name var_value
+      var_name=$(echo "$env_assignment" | cut -d= -f1)
+      var_value=$(echo "$env_assignment" | cut -d= -f2-)
+
+      # Resolve {PORT_*} to ${PORT_*} for Docker Compose interpolation
+      while [[ "$var_value" =~ \{PORT_([^}]+)\} ]]; do
+        local port_service="${BASH_REMATCH[1]}"
+        local port_safe
+        port_safe=$(_sanitize_var_name "$port_service")
+        var_value=$(echo "$var_value" | sed "s/{PORT_${port_service}}/\${PORT_${port_safe}}/g")
+      done
+
+      echo "      ${var_name}: \"${var_value}\""
+    fi
+  done < <(_parse_services DOCKER_ENV)
+}
+
 # hatch_write_docker_override WORKSPACE_NAME
 # Generates docker-compose.override.yaml dynamically from manifest
-# Reads DOCKER_SERVICES and DOCKER_EXTRAS
+# Reads DOCKER_SERVICES, DOCKER_EXTRAS, and DOCKER_ENV
 # Creates isolated containers with workspace-specific names and port mappings
 hatch_write_docker_override() {
   local workspace_name="$1"
@@ -66,6 +108,9 @@ hatch_write_docker_override() {
         echo "      - \"\${PORT_${safe_name}}:${container_port}\""
       done
 
+      # Emit environment overrides if configured
+      _emit_docker_env "$service_name"
+
       echo ""
     done < <(_parse_services DOCKER_SERVICES)
 
@@ -87,6 +132,9 @@ hatch_write_docker_override() {
       for container_port in "${ports[@]}"; do
         echo "      - \"\${PORT_${safe_name}}:${container_port}\""
       done
+
+      # Emit environment overrides if configured
+      _emit_docker_env "$service_name"
 
       echo ""
     done < <(_parse_services DOCKER_EXTRAS)
