@@ -264,7 +264,7 @@ Check if the project has MCP (Model Context Protocol) servers that need workspac
 | `StdioServerTransport` in source files | stdio-based MCP server |
 
 **For each MCP server, determine:**
-1. **name**: Identifier matching the key in `.mcp.json` `mcpServers` object
+1. **name**: Identifier for the MCP server (used as key in `mcpServers`)
 2. **command**: The executable (e.g., `npx`, `node`, `python`)
 3. **args**: Arguments passed to the command
 

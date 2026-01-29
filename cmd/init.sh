@@ -128,7 +128,7 @@ PORT_TEMPLATES="
   # .env:DATABASE_URL=postgresql://user:pass@localhost:{PORT_postgres}/db
 "
 
-# MCP servers — generates .mcp.json with resolved ports
+# MCP servers — written to ~/.claude.json with resolved ports
 # Format: "name:command:args"
 MCP_SERVERS="
   # my-server:npx:tsx mcp/host/src/index.ts
