@@ -138,8 +138,8 @@ PORT_TEMPLATES="
 # MCP_SERVERS: Model Context Protocol server definitions
 # Format: "name:command:args"
 #
-# Hatch generates a .mcp.json file with resolved ports so that MCP servers
-# can connect to workspace-specific services (databases, APIs, etc.)
+# Hatch writes MCP config to ~/.claude.json (project-scoped, user-local)
+# with resolved ports so MCP servers can connect to workspace-specific services.
 #
 # - name: Server identifier (must match entries in MCP_ENV)
 # - command: Executable (e.g., "npx", "node", "python")
@@ -160,7 +160,7 @@ MCP_SERVERS="
 # Supports {PORT_servicename} placeholders — resolved to workspace-specific ports.
 # Also supports {DOCKER_HOST} — resolved to host.docker.internal (macOS) or 172.17.0.1 (Linux).
 #
-# These env vars are written into the "env" block of each server in .mcp.json.
+# These env vars are written into the mcpServers config in ~/.claude.json.
 # The MCP server reads them via process.env at startup.
 #
 MCP_ENV="

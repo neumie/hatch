@@ -2,18 +2,18 @@
 # mcp.sh - MCP server configuration generation
 # Depends on: core.sh, manifest.sh, ports.sh
 #
-# .mcp.json is a GENERATED file (like docker-compose.override.yaml).
-# All MCP servers are declared in hatch.conf via MCP_SERVERS and MCP_ENV.
-# hatch setup always regenerates .mcp.json from those declarations.
+# MCP servers are declared in hatch.conf via MCP_SERVERS and MCP_ENV.
+# hatch setup writes them into ~/.claude.json under the project path,
+# keeping the project's committed .mcp.json untouched.
 
 # hatch_generate_mcp_config
 # Reads MCP_SERVERS and MCP_ENV from manifest
-# Generates .mcp.json with resolved port placeholders
+# Writes MCP config to ~/.claude.json (project-scoped, user-local)
 # MCP_SERVERS format: "name:command:args" (one per line)
 # MCP_ENV format: "server_name:KEY=value" (one per line, supports {PORT_x} placeholders)
 hatch_generate_mcp_config() {
   if [[ -z "${MCP_SERVERS:-}" ]]; then
-    _info "No MCP_SERVERS defined, skipping .mcp.json generation"
+    _info "No MCP_SERVERS defined, skipping MCP configuration"
     return 0
   fi
 
@@ -105,18 +105,48 @@ hatch_generate_mcp_config() {
 
   servers_json="$servers_json}"
 
-  # Write .mcp.json (pretty-printed if python3 available)
-  if command -v python3 &>/dev/null; then
-    python3 -c "
-import json, sys
-servers = json.loads(sys.argv[1])
-with open('.mcp.json', 'w') as f:
-    json.dump({'mcpServers': servers}, f, indent=2)
-    f.write('\n')
-" "$servers_json"
-  else
-    printf '{\n  "mcpServers": %s\n}\n' "$servers_json" > .mcp.json
+  # Write to ~/.claude.json under projects.<project_path>.mcpServers
+  # This keeps the project's .mcp.json untouched
+  local project_path
+  project_path=$(pwd -P)
+  local claude_json="$HOME/.claude.json"
+  local tmp_file="${claude_json}.tmp.$$"
+  local lock_dir="${claude_json}.lock"
+
+  _require jq "Install with: brew install jq (macOS) or apt install jq (Linux)"
+
+  # Acquire lock (mkdir is atomic on all filesystems)
+  local lock_attempts=0
+  while ! mkdir "$lock_dir" 2>/dev/null; do
+    lock_attempts=$((lock_attempts + 1))
+    if [[ $lock_attempts -ge 50 ]]; then
+      _die "Timed out waiting for lock on $claude_json (stale lock? remove $lock_dir)"
+    fi
+    sleep 0.1
+  done
+  # shellcheck disable=SC2064
+  trap "rmdir '$lock_dir' 2>/dev/null" EXIT
+
+  # Read existing config or start fresh
+  local existing='{}'
+  if [[ -f "$claude_json" ]]; then
+    if ! existing=$(jq '.' "$claude_json" 2>/dev/null); then
+      _warn "~/.claude.json contains invalid JSON, backing up to ~/.claude.json.bak"
+      cp "$claude_json" "${claude_json}.bak"
+      existing='{}'
+    fi
   fi
 
-  _success "Generated .mcp.json"
+  # Merge mcpServers into the project entry and write atomically
+  echo "$existing" | jq --argjson servers "$servers_json" --arg path "$project_path" \
+    '.projects[$path].mcpServers = $servers' > "$tmp_file" \
+    || { rm -f "$tmp_file"; rmdir "$lock_dir" 2>/dev/null; _die "Failed to write MCP config"; }
+
+  mv "$tmp_file" "$claude_json"
+
+  # Release lock
+  rmdir "$lock_dir" 2>/dev/null
+  trap - EXIT
+
+  _success "Written MCP servers to ~/.claude.json (project: $project_path)"
 }
