@@ -61,6 +61,13 @@ _check_port() {
   elif [[ "$HATCH_PLATFORM" == "linux" ]] && command -v ss >/dev/null 2>&1; then
     ss -tlnp 2>/dev/null | grep -q ":$1 " && return 0
   fi
+  # On macOS, Docker Desktop runs in a VM and its port bindings may not appear
+  # in lsof. Check Docker container port mappings directly.
+  if command -v docker >/dev/null 2>&1; then
+    if docker ps --format '{{.Ports}}' 2>/dev/null | grep -qE "(0\.0\.0\.0:|:::)$1->"; then
+      return 0
+    fi
+  fi
   return 1
 }
 
