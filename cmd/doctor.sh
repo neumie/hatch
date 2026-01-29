@@ -133,6 +133,21 @@ if [[ -f "hatch.conf" ]] || [[ -f "$HOME/.hatch/projects/$(basename "$PWD").conf
   esac
 fi
 
+# Check port registry
+echo ""
+echo "Port registry:"
+if [[ -f "${HATCH_HOME}/port-registry" ]]; then
+  source "$HATCH_LIB/ports.sh" 2>/dev/null || true
+  if type _port_registry_list &>/dev/null; then
+    _port_registry_list
+    _port_registry_clean 2>/dev/null || true
+  else
+    echo "  (ports.sh not loaded)"
+  fi
+else
+  echo "  (no registry file)"
+fi
+
 echo ""
 if [[ $FAILED -eq 0 ]]; then
   _success "All checks passed!"

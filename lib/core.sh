@@ -59,16 +59,71 @@ _check_port() {
   if lsof -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1; then
     return 0
   elif [[ "$HATCH_PLATFORM" == "linux" ]] && command -v ss >/dev/null 2>&1; then
-    ss -tlnp 2>/dev/null | grep -q ":$1 " && return 0
+    ss -tlnp 2>/dev/null | grep -qE ":$1\b" && return 0
   fi
-  # On macOS, Docker Desktop runs in a VM and its port bindings may not appear
-  # in lsof. Check Docker container port mappings directly.
+  # Docker port bindings may not appear in lsof/ss:
+  # - macOS: Docker Desktop runs in a VM with a proxy process
+  # - Linux: Docker may use iptables DNAT rules instead of docker-proxy
+  # Check Docker container port mappings directly.
   if command -v docker >/dev/null 2>&1; then
-    if docker ps --format '{{.Ports}}' 2>/dev/null | grep -qE "(0\.0\.0\.0:|:::)$1->"; then
+    if docker ps --format '{{.Ports}}' 2>/dev/null | grep -qE "(0\.0\.0\.0:|:::|\[::\]:)$1->"; then
       return 0
     fi
   fi
   return 1
+}
+
+# _report_port_user PORT
+# Prints diagnostic information about what process or container is using a port
+_report_port_user() {
+  local port="$1"
+
+  # Try lsof (gives PID and process name on both platforms)
+  if command -v lsof >/dev/null 2>&1; then
+    local lsof_output
+    lsof_output=$(lsof -iTCP:"$port" -sTCP:LISTEN -P -n 2>/dev/null | tail -n +2 | head -1)
+    if [[ -n "$lsof_output" ]]; then
+      local proc_name proc_pid
+      proc_name=$(echo "$lsof_output" | awk '{print $1}')
+      proc_pid=$(echo "$lsof_output" | awk '{print $2}')
+      _error "  -> Process: $proc_name (PID $proc_pid)"
+      _error "  -> To free: kill $proc_pid"
+      return
+    fi
+  fi
+
+  # Try ss on Linux
+  if [[ "$HATCH_PLATFORM" == "linux" ]] && command -v ss >/dev/null 2>&1; then
+    local ss_output
+    ss_output=$(ss -tlnp 2>/dev/null | grep -E ":$port\b" | head -1)
+    if [[ -n "$ss_output" ]]; then
+      _error "  -> $ss_output"
+      return
+    fi
+  fi
+
+  # Try Docker container lookup
+  if command -v docker >/dev/null 2>&1; then
+    local docker_match
+    docker_match=$(docker ps --format '{{.Names}}: {{.Ports}}' 2>/dev/null | grep -E ":$port->" | head -1)
+    if [[ -n "$docker_match" ]]; then
+      _error "  -> Docker container: $docker_match"
+      return
+    fi
+  fi
+
+  # Check hatch port registry
+  if [[ -f "${HATCH_HOME:-$HOME/.hatch}/port-registry" ]]; then
+    while IFS=$'\t' read -r reg_port reg_workspace _ _ _; do
+      local reg_end=$((reg_port + ${HATCH_PORT_SPACING:-20}))
+      if [[ "$port" -ge "$reg_port" ]] && [[ "$port" -lt "$reg_end" ]]; then
+        _error "  -> Hatch workspace '$reg_workspace' (base port: $reg_port)"
+        return
+      fi
+    done < "${HATCH_HOME:-$HOME/.hatch}/port-registry"
+  fi
+
+  _error "  -> Could not identify what is using port $port"
 }
 
 # Docker host hostname for container-to-host communication
