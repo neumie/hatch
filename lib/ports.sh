@@ -11,9 +11,9 @@
 HATCH_PORT_SPACING=20
 
 # Port Registry
-# File: $HATCH_HOME/port-registry (one line per active workspace)
+# File: $HATCH_CONFIG/port-registry (one line per active workspace)
 # Format: BASE_PORT\tWORKSPACE_NAME\tPROJECT_DIR\tTIMESTAMP\tPID
-HATCH_PORT_REGISTRY="${HATCH_HOME}/port-registry"
+HATCH_PORT_REGISTRY="${HATCH_CONFIG}/port-registry"
 
 # _sanitize_var_name NAME
 # Converts a service name to a valid bash variable name
@@ -44,7 +44,7 @@ _parse_services() {
 }
 
 # ---------------------------------------------------------------------------
-# Port Registry - Cross-workspace coordination via ~/.hatch/port-registry
+# Port Registry - Cross-workspace coordination via ~/.config/hatch/port-registry
 # ---------------------------------------------------------------------------
 
 # _port_registry_lock

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# seed.sh - Copy secret files to ~/.hatch/secrets for cross-worktree sharing
+# seed.sh - Copy secret files to ~/.config/hatch/secrets for cross-worktree sharing
 # Sources: manifest
 
 source "$HATCH_LIB/manifest.sh"

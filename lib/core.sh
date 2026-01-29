@@ -21,9 +21,10 @@ esac
 # Directory Constants
 HATCH_HOME="${HATCH_HOME:-$HOME/.hatch}"
 HATCH_LIB="$HATCH_HOME/lib"
-HATCH_SECRETS="${HATCH_SECRETS:-$HATCH_HOME/secrets}"
-HATCH_DATA="${HATCH_DATA:-$HATCH_HOME/data}"
-HATCH_PROJECTS="$HATCH_HOME/projects"
+HATCH_CONFIG="${HATCH_CONFIG:-$HOME/.config/hatch}"
+HATCH_SECRETS="${HATCH_SECRETS:-$HATCH_CONFIG/secrets}"
+HATCH_DATA="${HATCH_DATA:-$HATCH_CONFIG/data}"
+HATCH_PROJECTS="${HATCH_PROJECTS:-$HATCH_CONFIG/projects}"
 
 # Cross-Platform Wrapper Functions
 
@@ -113,14 +114,14 @@ _report_port_user() {
   fi
 
   # Check hatch port registry
-  if [[ -f "${HATCH_HOME:-$HOME/.hatch}/port-registry" ]]; then
+  if [[ -f "${HATCH_CONFIG:-$HOME/.config/hatch}/port-registry" ]]; then
     while IFS=$'\t' read -r reg_port reg_workspace _ _ _; do
       local reg_end=$((reg_port + ${HATCH_PORT_SPACING:-20}))
       if [[ "$port" -ge "$reg_port" ]] && [[ "$port" -lt "$reg_end" ]]; then
         _error "  -> Hatch workspace '$reg_workspace' (base port: $reg_port)"
         return
       fi
-    done < "${HATCH_HOME:-$HOME/.hatch}/port-registry"
+    done < "${HATCH_CONFIG:-$HOME/.config/hatch}/port-registry"
   fi
 
   _error "  -> Could not identify what is using port $port"
@@ -183,7 +184,7 @@ _kill_conflicting_ports() {
 # the current workspace's allocated ports. Returns 1 if none found.
 _find_conflicting_workspaces() {
   local workspace_name="$1"
-  local registry="${HATCH_HOME:-$HOME/.hatch}/port-registry"
+  local registry="${HATCH_CONFIG:-$HOME/.config/hatch}/port-registry"
   local found=()
 
   [[ -f "$registry" ]] || return 1

@@ -1,11 +1,11 @@
 #!/bin/bash
-# Crane Rental - hatch lifecycle hooks
+# Acme App - hatch lifecycle hooks
 # Place this alongside hatch.conf in the project root
 
 TOKEN="0000000000000000000000000000000000000000"
 ACTIONS_SECRET_KEY="2222222222222222222222222222222222222222"
 
-crane_rental_import() {
+acme_app_import() {
   local export_file="$1"
   local port
   port=$(hatch_resolve_port "contember-engine")
@@ -17,20 +17,20 @@ crane_rental_import() {
     "http://localhost:$port/import"
 }
 
-crane_rental_export() {
+acme_app_export() {
   local export_path="$1"
   _pkg_run contember data:export --output "$export_path"
 }
 
-crane_rental_setup() {
+acme_app_setup() {
   local port
   port=$(hatch_resolve_port "contember-engine")
   local api_url="http://localhost:${port}"
-  local content_url="${api_url}/content/crane-rental-management/live"
-  local actions_url="${api_url}/actions/crane-rental-management"
+  local content_url="${api_url}/content/acme-app-management/live"
+  local actions_url="${api_url}/actions/acme-app-management"
   local tenant_url="${api_url}/tenant"
 
-  _header "Crane Rental: Project-specific setup"
+  _header "Acme App: Project-specific setup"
 
   # Step 1: Get tenant person ID
   _info "Getting tenant person ID..."
@@ -107,5 +107,5 @@ crane_rental_setup() {
     _warn "Variables response: $variables_response"
   fi
 
-  _success "Crane Rental setup complete"
+  _success "Acme App setup complete"
 }

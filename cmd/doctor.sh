@@ -75,15 +75,15 @@ else
 fi
 
 # Check package managers if manifest exists
-if [[ -f "hatch.conf" ]] || [[ -f "$HOME/.hatch/projects/$(basename "$PWD").conf" ]]; then
+if [[ -f "hatch.conf" ]] || [[ -f "$HOME/.config/hatch/projects/$(basename "$PWD").conf" ]]; then
   echo ""
   echo "Checking package manager..."
   
   # Try to load manifest
   if [[ -f "hatch.conf" ]]; then
     source "hatch.conf"
-  elif [[ -f "$HOME/.hatch/projects/$(basename "$PWD").conf" ]]; then
-    source "$HOME/.hatch/projects/$(basename "$PWD").conf"
+  elif [[ -f "$HOME/.config/hatch/projects/$(basename "$PWD").conf" ]]; then
+    source "$HOME/.config/hatch/projects/$(basename "$PWD").conf"
   fi
   
   case "${PACKAGE_MANAGER:-none}" in
@@ -136,7 +136,7 @@ fi
 # Check port registry
 echo ""
 echo "Port registry:"
-if [[ -f "${HATCH_HOME}/port-registry" ]]; then
+if [[ -f "${HATCH_CONFIG}/port-registry" ]]; then
   source "$HATCH_LIB/ports.sh" 2>/dev/null || true
   if type _port_registry_list &>/dev/null; then
     _port_registry_list
