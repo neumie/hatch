@@ -91,6 +91,7 @@ hatch_load_manifest() {
   DEFAULT_BASE_PORT="${DEFAULT_BASE_PORT:-1481}"
   HOOKS_FILE="${HOOKS_FILE:-hatch.hooks.sh}"
   DOCKER_ENV="${DOCKER_ENV:-}"
+  SECRETS="${SECRETS:-}"
 
   # Export key variables for use in subshells
   export PROJECT_NAME
@@ -102,6 +103,7 @@ hatch_load_manifest() {
   export SETUP_STEPS
   export DEFAULT_BASE_PORT
   export HOOKS_FILE
+  export SECRETS
 
   _success "Loaded manifest for project: $PROJECT_NAME"
 }

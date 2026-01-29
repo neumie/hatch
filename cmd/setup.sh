@@ -56,7 +56,8 @@ hatch_write_env "$WORKSPACE_NAME"
 hatch_write_docker_override "$WORKSPACE_NAME"
 echo ""
 
-# Link secrets and inject ports
+# Write secrets from manifest, link external secrets, inject ports
+hatch_write_secrets
 hatch_link_secrets
 hatch_inject_ports
 
