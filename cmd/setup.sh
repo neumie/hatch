@@ -136,6 +136,19 @@ for step in ${SETUP_STEPS:-docker:up}; do
       fi
       hatch_migrate execute
       ;;
+    migrate:execute_until)
+      if [[ "$DOCKER_RUNNING" != "true" ]]; then
+        sleep 2
+      fi
+      # Resolve migration name from latest data export
+      _export_version=$(hatch_get_export_version 2>/dev/null || true)
+      if [[ -n "$_export_version" ]]; then
+        _migration_name=$(_resolve_migration_name "$_export_version")
+        hatch_migrate execute_until "$_migration_name"
+      else
+        _info "No export version found, skipping migrate:execute_until"
+      fi
+      ;;
     data:import)
       if [[ "$DOCKER_RUNNING" != "true" ]]; then
         hatch_import_data
