@@ -240,57 +240,63 @@ DB_NAME="acme_saas_dev"
 # Executed in order, stops on first failure
 #
 # Built-in steps:
-#   - docker:up          Start docker services
-#   - docker:down        Stop docker services
-#   - deps:install       Install package dependencies (uses PACKAGE_MANAGER)
-#   - migrate:execute    Run database migrations (uses MIGRATE_TOOL)
-#   - migrate:create     Generate new migration
-#   - data:import        Import seed/fixture data
-#   - data:export        Export data to fixtures
-#   - custom:funcname    Call custom function from HOOKS_FILE
+#   - docker:up              Start docker services
+#   - docker:down            Stop docker services
+#   - deps:install           Install package dependencies (uses PACKAGE_MANAGER)
+#   - migrate:execute        Run database migrations (uses MIGRATE_TOOL)
+#   - migrate:execute_until  Run migrations up to the data export version
+#   - data:import            Import data using DATA_IMPORT_CMD
+#   - custom:funcname        Call custom function from HOOKS_FILE
 #
 # Common patterns:
 #
 # Minimal (just docker + migrations):
 #   SETUP_STEPS="docker:up migrate:execute"
 #
-# Full setup with dependencies and data:
-#   SETUP_STEPS="docker:up deps:install migrate:execute data:import"
+# Full setup with data import (migrations split around import):
+#   SETUP_STEPS="docker:up migrate:execute_until data:import migrate:execute"
 #
 # Monorepo with custom bootstrap:
 #   SETUP_STEPS="docker:up custom:setup_workspaces migrate:execute"
 #
-SETUP_STEPS="docker:up deps:install migrate:execute data:import"
+SETUP_STEPS="docker:up deps:install migrate:execute"
 
 # ==============================================================================
 # DATA IMPORT/EXPORT
 # ==============================================================================
 
-# DATA_EXPORT_DIR: Directory to store exported data fixtures
-# Used by `hatch data:export` command
-# Default: "exports" in project root
-DATA_EXPORT_DIR="exports"
+# DATA_IMPORT_CMD: Command or function to import data (required for data:import step)
+# Receives the export file path as an argument.
+# Can be a shell function defined in HOOKS_FILE.
+#
+# Examples:
+#   DATA_IMPORT_CMD="psql -U $DB_USER -d $DB_NAME -f"
+#   DATA_IMPORT_CMD="my_import_function"  # defined in hatch.hooks.sh
+#
+# DATA_IMPORT_CMD="my_import_function"
 
-# DATA_IMPORT_DIR: Directory containing data fixtures to import
-# Used by `hatch data:import` command
-# Default: Same as DATA_EXPORT_DIR
-DATA_IMPORT_DIR="exports"
+# DATA_EXPORT_CMD: Command or function to export data (required for data:export)
+# Receives the output file path as an argument.
+# Can be a shell function defined in HOOKS_FILE.
+#
+# Examples:
+#   DATA_EXPORT_CMD="pg_dump -U $DB_USER -d $DB_NAME -f"
+#   DATA_EXPORT_CMD="my_export_function"  # defined in hatch.hooks.sh
+#
+# DATA_EXPORT_CMD="my_export_function"
 
-# DATA_EXPORT_CMD: Custom command to export data (optional)
-# If not set, hatch will attempt to use tool-specific defaults
+# MIGRATIONS_FILE_EXT: File extension for migration files (required for data versioning)
+# Used to scan MIGRATIONS_DIR and resolve export versions.
 #
-# Example:
-#   DATA_EXPORT_CMD="pg_dump -U $DB_USER -d $DB_NAME > exports/dump.sql"
-#
-# DATA_EXPORT_CMD="node scripts/export-fixtures.js"
+# MIGRATIONS_FILE_EXT="json"
 
-# DATA_IMPORT_CMD: Custom command to import data (optional)
-# If not set, hatch will attempt to use tool-specific defaults
+# MIGRATIONS_VERSION_EXTRACT: Custom shell pipeline to extract version from migration filename
+# Receives the filename via stdin. If not set, extracts the first 4 hyphen-separated segments.
 #
-# Example:
-#   DATA_IMPORT_CMD="psql -U $DB_USER -d $DB_NAME < exports/dump.sql"
+# Example (extract numeric prefix):
+#   MIGRATIONS_VERSION_EXTRACT="sed 's/_.*//'"
 #
-# DATA_IMPORT_CMD="node scripts/import-fixtures.js"
+# MIGRATIONS_VERSION_EXTRACT="cut -d_ -f1"
 
 # ==============================================================================
 # CUSTOM HOOKS

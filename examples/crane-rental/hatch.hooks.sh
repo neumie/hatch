@@ -5,6 +5,23 @@
 TOKEN="0000000000000000000000000000000000000000"
 ACTIONS_SECRET_KEY="2222222222222222222222222222222222222222"
 
+crane_rental_import() {
+  local export_file="$1"
+  local port
+  port=$(hatch_resolve_port "contember-engine")
+  curl -s --fail -X POST \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/x-ndjson" \
+    -H "Content-Encoding: gzip" \
+    -T "$export_file" \
+    "http://localhost:$port/import"
+}
+
+crane_rental_export() {
+  local export_path="$1"
+  _pkg_run contember data:export --output "$export_path"
+}
+
 crane_rental_setup() {
   local port
   port=$(hatch_resolve_port "contember-engine")

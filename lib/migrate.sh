@@ -3,14 +3,14 @@
 # Depends on: core.sh, manifest.sh
 
 # hatch_migrate SUBCOMMAND [args...]
-# SUBCOMMAND is: execute, diff, status, amend
+# SUBCOMMAND is: execute, execute_until, diff, status, amend
 # Reads MIGRATE_TOOL from manifest and dispatches to appropriate tool
 hatch_migrate() {
   local subcommand="${1:-}"
   shift || true
 
   if [[ -z "$subcommand" ]]; then
-    _die "Usage: hatch_migrate {execute|diff|status|amend} [args...]"
+    _die "Usage: hatch_migrate {execute|execute_until|diff|status|amend} [args...]"
   fi
 
   if [[ -z "${MIGRATE_TOOL:-}" ]]; then
@@ -23,6 +23,10 @@ hatch_migrate() {
         execute)
           _info "Executing Contember migrations"
           _pkg_run contember migrations:execute --yes
+          ;;
+        execute_until)
+          _info "Executing Contember migrations until: $1"
+          _pkg_run contember migrations:execute --yes --until "$1"
           ;;
         diff)
           _info "Creating Contember migration diff"
@@ -46,6 +50,10 @@ hatch_migrate() {
       case "$subcommand" in
         execute)
           _info "Executing Prisma migrations"
+          _pkg_run prisma migrate deploy
+          ;;
+        execute_until)
+          _warn "execute_until not supported for prisma; running all migrations"
           _pkg_run prisma migrate deploy
           ;;
         diff)
@@ -72,6 +80,10 @@ hatch_migrate() {
           _info "Executing Knex migrations"
           _pkg_run knex migrate:latest
           ;;
+        execute_until)
+          _warn "execute_until not supported for knex; running all migrations"
+          _pkg_run knex migrate:latest
+          ;;
         diff)
           _info "Creating Knex migration"
           _pkg_run knex migrate:make "$@"
@@ -94,6 +106,10 @@ hatch_migrate() {
       case "$subcommand" in
         execute)
           _info "Executing Drizzle migrations"
+          _pkg_run drizzle-kit push
+          ;;
+        execute_until)
+          _warn "execute_until not supported for drizzle; running all migrations"
           _pkg_run drizzle-kit push
           ;;
         diff)
@@ -122,6 +138,18 @@ hatch_migrate() {
           fi
           _info "Executing custom migration: $MIGRATE_CMD_EXECUTE"
           eval "$MIGRATE_CMD_EXECUTE"
+          ;;
+        execute_until)
+          if [[ -n "${MIGRATE_CMD_EXECUTE_UNTIL:-}" ]]; then
+            _info "Executing custom migrations until: $1"
+            eval "$MIGRATE_CMD_EXECUTE_UNTIL" "$1"
+          else
+            _warn "MIGRATE_CMD_EXECUTE_UNTIL not set for custom migration tool; running all migrations"
+            if [[ -z "${MIGRATE_CMD_EXECUTE:-}" ]]; then
+              _die "MIGRATE_CMD_EXECUTE not set for custom migration tool"
+            fi
+            eval "$MIGRATE_CMD_EXECUTE"
+          fi
           ;;
         diff)
           if [[ -z "${MIGRATE_CMD_DIFF:-}" ]]; then
