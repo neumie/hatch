@@ -67,7 +67,7 @@ hatch_start_servers() {
 
     _info "Starting $name in $directory on port $port"
 
-    # Start server in background (use absolute log path since we cd into directory)
+    # Start server in background, detached so it survives parent exit
     local log_file="$PWD/.hatch/${name}.log"
     (
       cd "$directory" || exit 1
@@ -75,6 +75,7 @@ hatch_start_servers() {
     ) &
 
     local pid=$!
+    disown "$pid" 2>/dev/null || true
 
     # Save PID and info
     echo "$name:$pid:$port:$directory" >> .hatch/pids
@@ -85,37 +86,6 @@ hatch_start_servers() {
   if [[ ! -s .hatch/pids ]]; then
     _warn "No servers started"
   fi
-}
-
-# hatch_run_servers [services...]
-# Like start_servers but runs in foreground - sets up trap for INT/TERM to kill all children
-# Used by `hatch run`
-hatch_run_servers() {
-  local pids=()
-
-  # Setup trap to kill all child processes on exit
-  trap 'hatch_stop_servers; exit' INT TERM
-
-  # Start servers and collect PIDs
-  hatch_start_servers "$@"
-
-  # Read PIDs from file
-  if [[ -f .hatch/pids ]]; then
-    while IFS=: read -r name pid port directory; do
-      [[ -z "$pid" ]] && continue
-      pids+=("$pid")
-    done < .hatch/pids
-  fi
-
-  if [[ ${#pids[@]} -eq 0 ]]; then
-    _warn "No servers to run"
-    return 0
-  fi
-
-  _info "Running in foreground. Press Ctrl+C to stop all servers."
-
-  # Wait for all background processes
-  wait
 }
 
 # hatch_stop_servers

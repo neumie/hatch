@@ -9,8 +9,8 @@ USAGE:
 
 COMMANDS:
   setup              Set up project (install deps, start docker, run migrations)
-  run [services...]  Start dev servers in foreground (Ctrl+C to stop)
-  stop               Stop Docker services
+  run [services...]  Start dev servers (use 'hatch stop' to shut down)
+  stop               Stop all services (dev servers + Docker)
   status             Show status of Docker and dev servers
   logs [services...] View Docker service logs (all or specific services)
   open [service]     Open service URL in browser
