@@ -43,7 +43,7 @@ Then run:
 hatch seed
 ```
 
-This copies those files to `~/.hatch/secrets/<project>/`. Every worktree running `hatch setup` will get them via symlinks.
+This copies those files to `~/.config/hatch/secrets/<project>/`. Every worktree running `hatch setup` will get them via symlinks.
 
 ### 4. Set up the workspace
 
@@ -106,7 +106,7 @@ hatch migrate status      # Show migration status
 ### Data
 
 ```bash
-hatch export              # Export project data to ~/.hatch/data/
+hatch export              # Export project data to ~/.config/hatch/data/
 hatch seed                # Re-seed secrets from current workspace
 ```
 
@@ -115,7 +115,7 @@ hatch seed                # Re-seed secrets from current workspace
 Hatch is designed for git worktrees. Each worktree gets its own:
 - Port allocation (no conflicts between workspaces)
 - Docker containers (namespaced by workspace)
-- Secret files (symlinked from shared `~/.hatch/secrets/`)
+- Secret files (symlinked from shared `~/.config/hatch/secrets/`)
 
 Typical workflow:
 

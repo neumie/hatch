@@ -27,7 +27,7 @@ COMMANDS:
   migrate amend      Amend latest migration (if supported)
   
   export             Export project data to fixtures
-  seed               Copy secret files to ~/.hatch/secrets for cross-worktree sharing
+  seed               Copy secret files to ~/.config/hatch/secrets for worktree sharing
   
   init               Initialize hatch.conf for current project
   doctor             Check system dependencies
@@ -48,15 +48,16 @@ EXAMPLES:
 CONFIGURATION:
   Hatch looks for configuration in:
     1. ./hatch.conf (project root)
-    2. ~/.hatch/projects/<project-name>.conf (user config)
+    2. ~/.config/hatch/projects/<project-name>.conf (user config)
   
   Run 'hatch init' to create a configuration file.
 
 DIRECTORIES:
-  HATCH_HOME:    ~/.hatch           (installation directory)
-  HATCH_SECRETS: ~/.hatch/secrets   (secret files per project)
-  HATCH_DATA:    ~/.hatch/data      (data exports per project)
-  HATCH_PROJECTS: ~/.hatch/projects (project configurations)
+  HATCH_HOME:     ~/.hatch              (installation / repo)
+  HATCH_CONFIG:   ~/.config/hatch       (user data root)
+  HATCH_SECRETS:  ~/.config/hatch/secrets   (secret files per project)
+  HATCH_DATA:     ~/.config/hatch/data      (data exports per project)
+  HATCH_PROJECTS: ~/.config/hatch/projects  (project configurations)
 
 MORE INFO:
   Documentation: https://github.com/neumie/hatch

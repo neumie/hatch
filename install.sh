@@ -30,10 +30,11 @@ else
   _ok "Installed version $(cat "$HATCH_HOME/VERSION" 2>/dev/null || echo 'unknown')"
 fi
 
-# Create data directories
-mkdir -p "$HATCH_HOME/secrets"
-mkdir -p "$HATCH_HOME/data"
-mkdir -p "$HATCH_HOME/projects"
+# Create user data directories (separate from repo)
+HATCH_CONFIG="${HATCH_CONFIG:-$HOME/.config/hatch}"
+mkdir -p "$HATCH_CONFIG/secrets"
+mkdir -p "$HATCH_CONFIG/data"
+mkdir -p "$HATCH_CONFIG/projects"
 
 # Make entry point executable
 chmod +x "$HATCH_HOME/bin/hatch"

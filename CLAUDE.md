@@ -13,7 +13,7 @@ Hatch is a workspace-isolated development environment manager for full-stack app
 **Library layer** (`lib/`):
 - `core.sh` — platform abstraction (sed -i, MD5, port checks, URL open), colored logging, utility functions
 - `manifest.sh` — loads and validates `hatch.conf` project configuration
-- `ports.sh` — dynamic port allocation with cross-workspace coordination via `~/.hatch/port-registry` (uses mkdir-based file locking for atomic updates)
+- `ports.sh` — dynamic port allocation with cross-workspace coordination via `~/.config/hatch/port-registry` (uses mkdir-based file locking for atomic updates)
 - `docker.sh` — generates `docker-compose.override.yaml` with resolved ports, manages containers
 - `process.sh` — daemonized dev server management (survives parent shell exit), PID tracking in `.hatch/pids`
 - `migrate.sh` — dispatches to migration tools (Prisma, Contember, Knex, Drizzle, custom)
@@ -25,7 +25,7 @@ Hatch is a workspace-isolated development environment manager for full-stack app
 
 **Configuration**: Projects define a `hatch.conf` file (bash-sourced) with multi-value string fields parsed internally. See `hatch.conf.example` for the full schema.
 
-**Port system**: Base port per workspace (default 1481) + unique offsets. Docker services use offsets 0-9, dev servers use 10+. Port registry at `~/.hatch/port-registry` prevents cross-workspace conflicts.
+**Port system**: Base port per workspace (default 1481) + unique offsets. Docker services use offsets 0-9, dev servers use 10+. Port registry at `~/.config/hatch/port-registry` prevents cross-workspace conflicts.
 
 ## Key Conventions
 

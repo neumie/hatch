@@ -76,13 +76,13 @@ echo ""
 # Ask where to save
 echo "Where would you like to save the configuration?"
 echo "  1) ./hatch.conf (project root)"
-echo "  2) ~/.hatch/projects/${PROJECT_NAME}.conf (user config)"
+echo "  2) ~/.config/hatch/projects/${PROJECT_NAME}.conf (user config)"
 echo ""
 read -p "Choice [1]: " choice
 choice="${choice:-1}"
 
 if [[ "$choice" == "2" ]]; then
-  CONFIG_FILE="$HOME/.hatch/projects/${PROJECT_NAME}.conf"
+  CONFIG_FILE="$HOME/.config/hatch/projects/${PROJECT_NAME}.conf"
   mkdir -p "$(dirname "$CONFIG_FILE")"
 else
   CONFIG_FILE="./hatch.conf"
