@@ -107,10 +107,16 @@ DEV_SERVERS=(
 
 ## Step 5: Map Port Templates
 
-Find environment variable files that reference localhost URLs and templatize them.
+Find **local-only environment files** that reference localhost URLs and templatize them.
 
 **Files to check:**
-- `.env.local`, `.env.development`, `.env.example`, `.dev.vars`
+- `.env.local`, `.env.development`, `.dev.vars`
+
+**IMPORTANT — only target untracked, local-only env files:**
+- **NEVER target files tracked by git.** Port injection modifies file contents in the working tree. If the file is tracked, this creates dirty diffs, risks accidentally committing local dev URLs over real production/staging values, and breaks other developers' environments. Only target files that are `.gitignore`d (e.g. `.env.local`, `.dev.vars`).
+- Port templates use sed to replace lines matching `^VAR_NAME = ` or `^VAR_NAME=`. This is safe for flat key=value files where each key appears once.
+- **NEVER target structured config files** like `wrangler.toml`, `next.config.js`, etc. These files often contain the same key in multiple sections (e.g. `[env.local]`, `[env.stage]`, `[env.prod]`), and the sed replacement will clobber **all** sections, destroying production/staging URLs.
+- Wrangler workers already read `.dev.vars` at runtime for local development, so there is no need to also inject into `wrangler.toml`.
 
 **Pattern matching:**
 Look for URLs like:
@@ -133,21 +139,20 @@ MAILHOG_URL=http://localhost:8025
 
 **Output:**
 ```bash
-PORT_TEMPLATES=(
-  ".env.local"
-  ".dev.vars"
-)
+PORT_TEMPLATES="
+  .env.local:VITE_API_URL=http://localhost:{PORT_api}/api
+  .env.local:DATABASE_URL=postgresql://user:pass@localhost:{PORT_postgres}/db
+  .env.local:NEXT_PUBLIC_WEB_URL=http://localhost:{PORT_web}
+  .env.local:MAILHOG_URL=http://localhost:{PORT_mailhog}
+"
 ```
 
-**Template content (`.env.local.template`):**
-```
-VITE_API_URL=http://localhost:{PORT_api}/api
-DATABASE_URL=postgresql://user:pass@localhost:{PORT_postgres}/db
-NEXT_PUBLIC_WEB_URL=http://localhost:{PORT_web}
-MAILHOG_URL=http://localhost:{PORT_mailhog}
-```
+**Do NOT include in PORT_TEMPLATES:**
+- Any file tracked by git — hatch will modify it on disk, creating dirty diffs and risking commits of local dev URLs over real values
+- `wrangler.toml` — use `.dev.vars` instead (wrangler reads it automatically for local dev)
+- `next.config.js` / `nuxt.config.ts` — use `.env.local` instead (frameworks read env files)
 
-**Note:** Create `.template` versions of these files. Hatch will populate them.
+**How to verify:** Run `git ls-files <path>` — if it returns output, the file is tracked and must NOT be used as a port template.
 
 ---
 
