@@ -20,6 +20,11 @@ hatch_start_servers() {
   # Create .hatch directory if it doesn't exist
   mkdir -p .hatch
 
+  # Stop any existing servers before starting new ones
+  if [[ -f .hatch/pids ]] && [[ -s .hatch/pids ]]; then
+    hatch_stop_servers
+  fi
+
   # Clear existing pid file
   : > .hatch/pids
 
@@ -104,18 +109,15 @@ hatch_stop_servers() {
     if kill -0 "$pid" 2>/dev/null; then
       _info "Stopping $name (PID: $pid)"
 
-      # Kill child processes first
-      pkill -P "$pid" 2>/dev/null || true
-
-      # Kill main process
-      kill "$pid" 2>/dev/null || true
+      # Kill entire process tree recursively
+      _kill_tree "$pid"
 
       # Wait a moment for graceful shutdown
       sleep 0.5
 
-      # Force kill if still running
+      # Force kill the tree if root is still running
       if kill -0 "$pid" 2>/dev/null; then
-        kill -9 "$pid" 2>/dev/null || true
+        _kill_tree "$pid" 9
       fi
 
       _success "Stopped $name"
@@ -127,6 +129,20 @@ hatch_stop_servers() {
   # Remove pid file
   rm -f .hatch/pids
   _success "All servers stopped"
+}
+
+# _kill_tree PID [SIGNAL]
+# Recursively kill a process and all its descendants (depth-first)
+_kill_tree() {
+  local pid=$1
+  local sig=${2:-TERM}
+  local children
+  children=$(pgrep -P "$pid" 2>/dev/null) || true
+  local child
+  for child in $children; do
+    _kill_tree "$child" "$sig"
+  done
+  kill -"$sig" "$pid" 2>/dev/null || true
 }
 
 # hatch_server_status
