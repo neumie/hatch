@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# up.sh - Start dev servers in background
-# Sources: manifest, ports, process
+# up.sh - Start Docker services and dev servers
+# Sources: manifest, ports, docker, process
 
 source "$HATCH_LIB/manifest.sh"
 source "$HATCH_LIB/ports.sh"
+source "$HATCH_LIB/docker.sh"
 source "$HATCH_LIB/process.sh"
 
 # Load manifest
@@ -14,6 +15,11 @@ hatch_load_manifest "$PROJECT_NAME"
 # Generate and allocate ports
 hatch_generate_ports "$WORKSPACE_NAME" "$PROJECT_NAME"
 hatch_allocate_ports
+
+# Start Docker services if not already running
+if ! hatch_docker_running; then
+  hatch_docker_up
+fi
 
 # Start servers (daemonized - they persist after this script exits)
 hatch_start_servers "$@"
