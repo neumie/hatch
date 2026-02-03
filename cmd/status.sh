@@ -15,14 +15,21 @@ for arg in "$@"; do
   esac
 done
 
-# Load manifest
-PROJECT_NAME=$(hatch_detect_project)
-WORKSPACE_NAME=$(hatch_resolve_workspace)
-hatch_load_manifest "$PROJECT_NAME"
-
-# Generate and allocate ports
-hatch_generate_ports "$WORKSPACE_NAME" "$PROJECT_NAME"
-hatch_allocate_ports
+# Load manifest and allocate ports
+# In --md mode, redirect setup noise to stderr so only clean markdown hits stdout
+if [[ $MD_OUTPUT -eq 1 ]]; then
+  PROJECT_NAME=$(hatch_detect_project)
+  WORKSPACE_NAME=$(hatch_resolve_workspace)
+  hatch_load_manifest "$PROJECT_NAME" >&2
+  hatch_generate_ports "$WORKSPACE_NAME" "$PROJECT_NAME" >&2
+  hatch_allocate_ports >&2
+else
+  PROJECT_NAME=$(hatch_detect_project)
+  WORKSPACE_NAME=$(hatch_resolve_workspace)
+  hatch_load_manifest "$PROJECT_NAME"
+  hatch_generate_ports "$WORKSPACE_NAME" "$PROJECT_NAME"
+  hatch_allocate_ports
+fi
 
 if [[ $MD_OUTPUT -eq 1 ]]; then
   # ---------------------------------------------------------------
