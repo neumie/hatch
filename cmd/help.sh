@@ -12,7 +12,7 @@ COMMANDS:
   up [services...]   Start dev servers (use 'hatch stop' to pause)
   stop               Stop all services (dev servers + Docker, keeps containers)
   down [--force]     Tear down workspace (remove containers, volumes, release ports)
-  status             Show status of Docker and dev servers
+  status [--md]      Show status of Docker and dev servers
   logs [services...] View Docker service logs (all or specific services)
   open [service]     Open service URL in browser
   
