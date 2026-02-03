@@ -113,6 +113,9 @@ hatch_load_hooks
 # Execute SETUP_STEPS in order
 _header "Executing setup steps"
 
+# Track non-fatal step failures (e.g. data:import) to report at the end.
+# Other steps (docker:up, migrate, etc.) are critical and fail-fast via set -e.
+_step_failed=0
 for step in ${SETUP_STEPS:-docker:up}; do
   case "$step" in
     docker:up)
@@ -151,7 +154,9 @@ for step in ${SETUP_STEPS:-docker:up}; do
       ;;
     data:import)
       if [[ "$DOCKER_RUNNING" != "true" ]]; then
-        hatch_import_data
+        if ! hatch_import_data; then
+          _step_failed=1
+        fi
       else
         _info "Docker was already running, skipping data import"
       fi
@@ -170,6 +175,11 @@ for step in ${SETUP_STEPS:-docker:up}; do
       ;;
   esac
 done
+
+if [[ "$_step_failed" -eq 1 ]]; then
+  echo ""
+  _die "Setup failed: one or more steps did not complete successfully"
+fi
 
 echo ""
 
