@@ -68,6 +68,8 @@ if [[ $MD_OUTPUT -eq 1 ]]; then
           status="stopped"
         fi
         echo "| $name | $port | $url | $status |"
+      else
+        echo "| $name | n/a | n/a | unknown |"
       fi
     done < <(_parse_services DOCKER_SERVICES; _parse_services DOCKER_EXTRAS)
     echo ""
@@ -103,16 +105,24 @@ if [[ $MD_OUTPUT -eq 1 ]]; then
           done < .hatch/pids
         fi
         echo "| $name | $port | $url | $status |"
+      else
+        echo "| $name | n/a | n/a | unknown |"
       fi
     done < <(_parse_services DEV_SERVERS)
     echo ""
   fi
 
-  # -- Database section --
+  # -- Database section (dev-only credentials, safe to display) --
   if [[ -n "${DB_USER:-}" ]] || [[ -n "${DB_NAME:-}" ]]; then
     db_password="${DB_PASSWORD:-${DB_PASS:-}}"
     db_host="localhost"
-    db_port=$(hatch_resolve_port "postgres" 2>/dev/null || echo "5432")
+    db_scheme="postgresql"
+    db_port=$(hatch_resolve_port "postgres" 2>/dev/null || echo "")
+    if [[ -z "$db_port" ]]; then
+      db_port=$(hatch_resolve_port "mysql" 2>/dev/null || echo "")
+      [[ -n "$db_port" ]] && db_scheme="mysql"
+    fi
+    db_port="${db_port:-5432}"
 
     echo "## Database"
     echo ""
@@ -121,7 +131,7 @@ if [[ $MD_OUTPUT -eq 1 ]]; then
     echo "- **User:** ${DB_USER:-}"
     echo "- **Password:** ${db_password}"
     echo "- **Database:** ${DB_NAME:-}"
-    echo "- **Connection string:** \`postgresql://${DB_USER:-}:${db_password}@${db_host}:${db_port}/${DB_NAME:-}\`"
+    echo "- **Connection string:** \`${db_scheme}://${DB_USER:-}:${db_password}@${db_host}:${db_port}/${DB_NAME:-}\`"
     echo ""
   fi
 
@@ -135,23 +145,31 @@ if [[ $MD_OUTPUT -eq 1 ]]; then
     while IFS= read -r server_spec; do
       [[ -z "$server_spec" ]] && continue
       name=$(echo "$server_spec" | cut -d: -f1)
-      command=$(echo "$server_spec" | cut -d: -f2-)
-      echo "| $name | \`$command\` |"
+      mcp_cmd=$(echo "$server_spec" | cut -d: -f2-)
+      echo "| $name | \`$mcp_cmd\` |"
     done < <(_parse_services MCP_SERVERS)
     echo ""
   fi
 
   # -- URLs section --
-  echo "## URLs"
-  echo ""
+  has_urls=0
+  url_lines=""
   while IFS= read -r service_spec; do
     [[ -z "$service_spec" ]] && continue
     name=$(echo "$service_spec" | cut -d: -f1)
     port=$(hatch_resolve_port "$name" 2>/dev/null || echo "")
     if [[ -n "$port" ]]; then
-      echo "- **$name:** http://localhost:$port"
+      has_urls=1
+      url_lines="${url_lines}- **$name:** http://localhost:$port
+"
     fi
   done < <(_parse_services DOCKER_SERVICES; _parse_services DOCKER_EXTRAS; _parse_services DEV_SERVERS)
+
+  if [[ $has_urls -eq 1 ]]; then
+    echo "## URLs"
+    echo ""
+    printf '%s' "$url_lines"
+  fi
 
 else
   # ---------------------------------------------------------------
@@ -171,11 +189,17 @@ else
   hatch_server_status
   echo ""
 
-  # Database
+  # Database (dev-only credentials, safe to display)
   if [[ -n "${DB_USER:-}" ]] || [[ -n "${DB_NAME:-}" ]]; then
     db_password="${DB_PASSWORD:-${DB_PASS:-}}"
     db_host="localhost"
-    db_port=$(hatch_resolve_port "postgres" 2>/dev/null || echo "5432")
+    db_scheme="postgresql"
+    db_port=$(hatch_resolve_port "postgres" 2>/dev/null || echo "")
+    if [[ -z "$db_port" ]]; then
+      db_port=$(hatch_resolve_port "mysql" 2>/dev/null || echo "")
+      [[ -n "$db_port" ]] && db_scheme="mysql"
+    fi
+    db_port="${db_port:-5432}"
 
     _info "Database:"
     echo "  Host:              $db_host"
@@ -183,7 +207,7 @@ else
     echo "  User:              ${DB_USER:-}"
     echo "  Password:          ${db_password}"
     echo "  Database:          ${DB_NAME:-}"
-    echo "  Connection string: postgresql://${DB_USER:-}:${db_password}@${db_host}:${db_port}/${DB_NAME:-}"
+    echo "  Connection string: ${db_scheme}://${DB_USER:-}:${db_password}@${db_host}:${db_port}/${DB_NAME:-}"
     echo ""
   fi
 
@@ -193,8 +217,8 @@ else
     while IFS= read -r server_spec; do
       [[ -z "$server_spec" ]] && continue
       name=$(echo "$server_spec" | cut -d: -f1)
-      command=$(echo "$server_spec" | cut -d: -f2-)
-      echo "  $name: $command"
+      mcp_cmd=$(echo "$server_spec" | cut -d: -f2-)
+      echo "  $name: $mcp_cmd"
     done < <(_parse_services MCP_SERVERS)
     echo ""
   fi
