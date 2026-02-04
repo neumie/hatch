@@ -134,16 +134,23 @@ hatch_export_data() {
     _die "DATA_EXPORT_CMD not set. Configure it in hatch.conf to export data."
   fi
 
+  # Write to a temp file in the project directory first.
+  # This is necessary because the export command may run inside Docker where
+  # only the project directory is volume-mounted (not the hatch data directory).
+  local tmp_export=".hatch-export-tmp-${export_filename}"
+  trap 'rm -f "$tmp_export"' RETURN
+
   _info "Exporting data"
-  if ! eval "$DATA_EXPORT_CMD" "$export_path"; then
+  if ! eval "$DATA_EXPORT_CMD" "$tmp_export"; then
     _error "Export command failed"
     return 1
   fi
 
-  if [[ -f "$export_path" ]]; then
-    _success "Data exported to: $export_path"
-  else
-    _error "Export file not created: $export_path"
+  if [[ ! -f "$tmp_export" ]]; then
+    _error "Export file not created"
     return 1
   fi
+
+  mv "$tmp_export" "$export_path"
+  _success "Data exported to: $export_path"
 }
