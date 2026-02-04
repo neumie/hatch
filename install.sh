@@ -1,11 +1,11 @@
 #!/bin/bash
 # Hatch installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/{org}/hatch/main/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/neumie/hatch/main/install.sh | bash
 
 set -euo pipefail
 
 HATCH_HOME="${HATCH_HOME:-$HOME/.hatch}"
-REPO_URL="${HATCH_REPO:-https://github.com/{org}/hatch.git}"
+REPO_URL="${HATCH_REPO:-https://github.com/neumie/hatch.git}"
 
 _info() { printf '\033[34m[info]\033[0m %s\n' "$1"; }
 _ok()   { printf '\033[32m[ok]\033[0m   %s\n' "$1"; }
