@@ -15,5 +15,8 @@ hatch_load_manifest "$PROJECT_NAME"
 hatch_generate_ports "$WORKSPACE_NAME" "$PROJECT_NAME"
 hatch_allocate_ports
 
+# Load hooks (provides project_export and other custom functions)
+hatch_load_hooks
+
 # Export data
 hatch_export_data
