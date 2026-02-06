@@ -98,7 +98,11 @@ hatch_start_servers() {
 }
 
 # hatch_stop_servers
-# Reads .hatch/pids, kills each PID and its children, removes pid file
+# Reads .hatch/pids, kills each PID and its children, removes pid file.
+# Uses three layers of cleanup to handle orphaned descendants:
+#   1. Process group kill (catches children that kept the same PGID)
+#   2. Recursive tree kill via pgrep -P
+#   3. Port-based sweep via lsof (catches fully orphaned processes)
 hatch_stop_servers() {
   if [[ ! -f .hatch/pids ]]; then
     _warn "No running servers found (.hatch/pids does not exist)"
@@ -110,33 +114,31 @@ hatch_stop_servers() {
   while IFS=: read -r name pid port directory; do
     [[ -z "$pid" ]] && continue
 
-    if kill -0 "$pid" 2>/dev/null; then
-      _info "Stopping $name (PID: $pid)"
+    _info "Stopping $name (PID: $pid)"
 
-      # Kill entire process tree recursively
+    if kill -0 "$pid" 2>/dev/null; then
+      # Layer 1: Kill the process group (PGID == PID for background subshells)
+      kill -TERM -"$pid" 2>/dev/null || true
+
+      # Layer 2: Kill the tree via parent-child walk
       _kill_tree "$pid"
 
       # Wait a moment for graceful shutdown
       sleep 0.5
 
-      # Force kill the tree if root is still running
+      # Force kill if root is still running
       if kill -0 "$pid" 2>/dev/null; then
+        kill -KILL -"$pid" 2>/dev/null || true
         _kill_tree "$pid" 9
       fi
-
-      _success "Stopped $name"
-    else
-      # PID is dead — but if something else grabbed the port, offer to reclaim
-      if [[ -n "$port" ]] && _check_port "$port"; then
-        if _try_reclaim_port "$port" "$name (PID: $pid) is stale — port $port held by orphan"; then
-          _success "Stopped $name (orphan)"
-        else
-          _warn "$name (PID: $pid) is not running (port $port still occupied)"
-        fi
-      else
-        _warn "$name (PID: $pid) is not running"
-      fi
     fi
+
+    # Layer 3: Sweep the port for orphaned processes (e.g. esbuild)
+    if [[ -n "$port" ]] && _check_port "$port"; then
+      _force_free_port "$port"
+    fi
+
+    _success "Stopped $name"
   done < .hatch/pids
 
   # Remove pid file
@@ -156,6 +158,36 @@ _kill_tree() {
     _kill_tree "$child" "$sig"
   done
   kill -"$sig" "$pid" 2>/dev/null || true
+}
+
+# _force_free_port PORT
+# Non-interactive: kills whatever process is listening on PORT.
+# Used during hatch stop to clean up orphaned descendants (e.g. esbuild)
+# that survived the tree kill because their parent-child chain broke.
+_force_free_port() {
+  local port="$1"
+  local pids
+  pids=$(lsof -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null) || true
+  [[ -z "$pids" ]] && return 0
+
+  local p
+  for p in $pids; do
+    _kill_tree "$p"
+  done
+  sleep 0.5
+
+  # Force kill any survivors
+  pids=$(lsof -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null) || true
+  for p in $pids; do
+    _kill_tree "$p" 9
+  done
+
+  # Wait for port to actually be released (up to 3s)
+  local attempts=0
+  while _check_port "$port" && [[ $attempts -lt 6 ]]; do
+    sleep 0.5
+    attempts=$((attempts + 1))
+  done
 }
 
 # _try_reclaim_port PORT [WARNING_PREFIX]
