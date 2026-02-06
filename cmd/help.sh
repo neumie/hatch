@@ -10,6 +10,7 @@ USAGE:
 COMMANDS:
   setup              Set up project (install deps, start docker, run migrations)
   up [services...]   Start dev servers (use 'hatch stop' to pause)
+  restart [services...] Restart dev servers (keeps Docker running)
   stop               Stop all services (dev servers + Docker, keeps containers)
   down [--force]     Tear down workspace (remove containers, volumes, release ports)
   status [--md]      Show status of Docker and dev servers

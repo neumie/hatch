@@ -60,10 +60,14 @@ hatch_start_servers() {
     local port
     port=$(hatch_resolve_port "$name") || _die "Failed to resolve port for $name"
 
-    # Check if port is available
+    # Check if port is available — offer to reclaim if occupied
     if _check_port "$port"; then
-      _error "Port $port for service '$name' is already in use"
-      continue
+      _try_reclaim_port "$port" "Port $port for '$name' is in use by" || true
+      if _check_port "$port"; then
+        _error "Port $port for service '$name' is already in use"
+        _report_port_user "$port"
+        continue
+      fi
     fi
 
     # Replace {PORT} placeholder in command
@@ -122,7 +126,16 @@ hatch_stop_servers() {
 
       _success "Stopped $name"
     else
-      _warn "$name (PID: $pid) is not running"
+      # PID is dead — but if something else grabbed the port, offer to reclaim
+      if [[ -n "$port" ]] && _check_port "$port"; then
+        if _try_reclaim_port "$port" "$name (PID: $pid) is stale — port $port held by orphan"; then
+          _success "Stopped $name (orphan)"
+        else
+          _warn "$name (PID: $pid) is not running (port $port still occupied)"
+        fi
+      else
+        _warn "$name (PID: $pid) is not running"
+      fi
     fi
   done < .hatch/pids
 
@@ -143,6 +156,44 @@ _kill_tree() {
     _kill_tree "$child" "$sig"
   done
   kill -"$sig" "$pid" 2>/dev/null || true
+}
+
+# _try_reclaim_port PORT [WARNING_PREFIX]
+# Finds the process listening on PORT via lsof, warns with the given prefix,
+# and interactively offers to kill it. Returns 0 if killed, 1 otherwise.
+# Note: lsof -t may return multiple PIDs (fork-based servers, SO_REUSEPORT);
+# we take the first and rely on _kill_tree to handle the process tree.
+_try_reclaim_port() {
+  local port="$1"
+  local warn_prefix="${2:-Port $port is in use by}"
+  local stale_pid
+  stale_pid=$(lsof -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null | head -1)
+  [[ -z "$stale_pid" ]] && return 1
+
+  _warn "${warn_prefix} PID $stale_pid"
+
+  if [[ -t 0 ]]; then
+    local confirm
+    read -r -p "  Kill PID $stale_pid to free port $port? [y/N] " confirm || confirm=n
+    if [[ "$confirm" == "y" ]] || [[ "$confirm" == "Y" ]]; then
+      _kill_tree "$stale_pid"
+      sleep 0.5
+      if kill -0 "$stale_pid" 2>/dev/null; then
+        _kill_tree "$stale_pid" 9
+        sleep 0.5
+      fi
+      # Wait for port to actually be released (up to 3s)
+      local attempts=0
+      while _check_port "$port" && [[ $attempts -lt 6 ]]; do
+        sleep 0.5
+        attempts=$((attempts + 1))
+      done
+      return 0
+    fi
+  else
+    _info "Run 'kill $stale_pid' to free port $port"
+  fi
+  return 1
 }
 
 # hatch_server_status
