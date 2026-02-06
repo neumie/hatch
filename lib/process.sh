@@ -149,10 +149,11 @@ hatch_start_servers() {
 
 # hatch_stop_servers
 # Reads .hatch/pids, kills each PID and its children, removes pid file.
-# Uses three layers of cleanup to handle orphaned descendants:
+# Uses four layers of cleanup to handle orphaned descendants:
 #   1. Process group kill (catches children that kept the same PGID)
 #   2. Recursive tree kill via pgrep -P
-#   3. Port-based sweep via lsof (catches fully orphaned processes)
+#   3. Port-based sweep via lsof (catches orphans still holding the port)
+#   4. Workspace path sweep via pgrep -f (catches non-listening orphans like esbuild)
 hatch_stop_servers() {
   if [[ ! -f .hatch/pids ]]; then
     _warn "No running servers found (.hatch/pids does not exist)"
@@ -186,6 +187,13 @@ hatch_stop_servers() {
     # Layer 3: Sweep the port for orphaned processes (e.g. esbuild)
     if [[ -n "$port" ]] && _check_port "$port"; then
       _force_free_port "$port"
+    fi
+
+    # Layer 4: Kill any remaining processes spawned from this workspace directory.
+    # Catches non-listening orphans (e.g. esbuild bundler) that escaped layers 1-3
+    # because they called setsid() and don't hold a port.
+    if [[ -n "$directory" ]]; then
+      _sweep_workspace_processes "$directory"
     fi
 
     _success "Stopped $name"
@@ -237,6 +245,34 @@ _force_free_port() {
   while _check_port "$port" && [[ $attempts -lt 6 ]]; do
     sleep 0.5
     attempts=$((attempts + 1))
+  done
+}
+
+# _sweep_workspace_processes DIRECTORY
+# Last-resort cleanup: finds processes whose binary path lives inside DIRECTORY
+# (typically node_modules/.../esbuild) and kills them. Avoids false positives by
+# matching only processes whose executable path starts with the absolute workspace dir.
+_sweep_workspace_processes() {
+  local directory="$1"
+  local abs_dir
+  abs_dir=$(cd "$directory" 2>/dev/null && pwd) || return 0
+
+  local orphan_pids
+  orphan_pids=$(pgrep -f "^${abs_dir}/" 2>/dev/null) || true
+  [[ -z "$orphan_pids" ]] && return 0
+
+  local p
+  for p in $orphan_pids; do
+    # Skip our own shell process
+    [[ "$p" == "$$" ]] && continue
+    kill -TERM "$p" 2>/dev/null || true
+  done
+  sleep 0.3
+
+  orphan_pids=$(pgrep -f "^${abs_dir}/" 2>/dev/null) || true
+  for p in $orphan_pids; do
+    [[ "$p" == "$$" ]] && continue
+    kill -KILL "$p" 2>/dev/null || true
   done
 }
 
