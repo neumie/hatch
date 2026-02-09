@@ -1,6 +1,50 @@
 #!/usr/bin/env bash
+set -euo pipefail
 # process.sh - Manifest-driven process management for dev servers
 # Depends on: core.sh, manifest.sh, ports.sh
+
+# _stop_targeted_servers service1 [service2 ...]
+# Stops only the named servers from .hatch/pids, preserving other entries.
+_stop_targeted_servers() {
+  local targets=("$@")
+  local tmp_pids
+  tmp_pids=$(mktemp)
+
+  while IFS=: read -r name pid port directory; do
+    [[ -z "$pid" ]] && continue
+
+    local should_stop=0
+    local target
+    for target in "${targets[@]}"; do
+      if [[ "$target" == "$name" ]]; then
+        should_stop=1
+        break
+      fi
+    done
+
+    if [[ $should_stop -eq 1 ]]; then
+      _info "Stopping $name (PID: $pid)"
+      if kill -0 "$pid" 2>/dev/null; then
+        kill -TERM -"$pid" 2>/dev/null || true
+        _kill_tree "$pid"
+        sleep 0.5
+        if kill -0 "$pid" 2>/dev/null; then
+          kill -KILL -"$pid" 2>/dev/null || true
+          _kill_tree "$pid" 9
+        fi
+      fi
+      if [[ -n "$port" ]] && _check_port "$port"; then
+        _force_free_port "$port"
+      fi
+      _success "Stopped $name"
+    else
+      # Preserve this entry
+      echo "$name:$pid:$port:$directory" >> "$tmp_pids"
+    fi
+  done < .hatch/pids
+
+  mv "$tmp_pids" .hatch/pids
+}
 
 # hatch_start_servers [services...]
 # Reads DEV_SERVERS from manifest. Format per entry: "name:directory:command:port_offset"
@@ -20,13 +64,19 @@ hatch_start_servers() {
   # Create .hatch directory if it doesn't exist
   mkdir -p .hatch
 
-  # Stop any existing servers before starting new ones
+  # Stop existing servers before starting new ones
   if [[ -f .hatch/pids ]] && [[ -s .hatch/pids ]]; then
-    hatch_stop_servers
+    if [[ $has_targets -eq 1 ]]; then
+      # Only stop targeted servers, preserve others
+      _stop_targeted_servers "${target_services[@]}"
+    else
+      hatch_stop_servers
+      # Clear pid file only when restarting all
+      : > .hatch/pids
+    fi
+  else
+    : > .hatch/pids
   fi
-
-  # Clear existing pid file
-  : > .hatch/pids
 
   _header "Starting dev servers"
 
