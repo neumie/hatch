@@ -1,8 +1,12 @@
 {
   "manifest_version": 3,
   "name": "Hatch Workspace Tabs",
-  "version": "1.0",
-  "description": "Prefixes browser tab titles with the Hatch workspace name for easy identification.",
+  "version": "1.1",
+  "description": "Groups and color-codes browser tabs by Hatch workspace name.",
+  "permissions": ["tabs", "tabGroups"],
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
       "matches": ["http://localhost:*/*"],
