@@ -201,7 +201,7 @@ while IFS= read -r service_spec; do
   name=$(echo "$service_spec" | cut -d: -f1)
   port=$(hatch_resolve_port "$name" 2>/dev/null || echo "")
   if [[ -n "$port" ]]; then
-    echo "  $name: http://localhost:$port"
+    echo "  $name: http://localhost:$port#hatch:$WORKSPACE_NAME"
   fi
 done < <(_parse_services DOCKER_SERVICES; _parse_services DOCKER_EXTRAS)
 
