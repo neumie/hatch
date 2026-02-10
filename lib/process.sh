@@ -139,7 +139,7 @@ hatch_start_servers() {
     # Save PID and info
     echo "$name:$pid:$port:$directory" >> .hatch/pids
 
-    _success "Started $name (PID: $pid) - http://localhost:$port"
+    _success "Started $name (PID: $pid) - http://localhost:$port#hatch:$WORKSPACE_NAME"
   done < <(_parse_services DEV_SERVERS)
 
   if [[ ! -s .hatch/pids ]]; then
@@ -330,7 +330,7 @@ hatch_server_status() {
     [[ -z "$pid" ]] && continue
 
     if kill -0 "$pid" 2>/dev/null; then
-      _success "$name (PID: $pid) - RUNNING - http://localhost:$port"
+      _success "$name (PID: $pid) - RUNNING - http://localhost:$port#hatch:$WORKSPACE_NAME"
       has_running=1
     else
       _warn "$name (PID: $pid) - STOPPED"
