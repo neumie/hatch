@@ -3,12 +3,14 @@ var COLORS = ['blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orang
 
 // workspace name -> { groupId, color }
 var workspaceGroups = {};
-var colorIndex = 0;
 
-function nextColor() {
-  var color = COLORS[colorIndex % COLORS.length];
-  colorIndex++;
-  return color;
+function colorForWorkspace(name) {
+  var hash = 0;
+  for (var i = 0; i < name.length; i++) {
+    hash = ((hash << 5) - hash) + name.charCodeAt(i);
+    hash = hash & hash; // 32-bit integer
+  }
+  return COLORS[Math.abs(hash) % COLORS.length];
 }
 
 // Find an existing tab group by title, or return null
@@ -47,7 +49,7 @@ async function groupTab(tabId, workspace) {
   }
 
   // Create a new group
-  var color = nextColor();
+  var color = colorForWorkspace(workspace);
   var groupId = await chrome.tabs.group({ tabIds: [tabId], createProperties: { windowId: windowId } });
   await chrome.tabGroups.update(groupId, { title: workspace, color: color });
   workspaceGroups[workspace] = { groupId: groupId, color: color };
