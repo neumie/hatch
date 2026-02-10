@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Hatch Workspace Tabs",
+  "version": "1.0",
+  "description": "Prefixes browser tab titles with the Hatch workspace name for easy identification.",
+  "content_scripts": [
+    {
+      "matches": ["http://localhost:*/*"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ]
+}
