@@ -28,4 +28,7 @@
     document.querySelector('head'),
     { childList: true, subtree: true, characterData: true }
   );
+
+  // Ask background worker to group this tab
+  chrome.runtime.sendMessage({ type: 'hatch-group', workspace: workspace });
 })();
