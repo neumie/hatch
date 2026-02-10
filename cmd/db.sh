@@ -35,9 +35,9 @@ case "$SUBCOMMAND" in
       _error "Adminer service not found in manifest"
       exit 1
     fi
-    URL="http://localhost:$ADMINER_PORT#hatch:$WORKSPACE_NAME"
-    _info "Opening Adminer: $URL"
-    _open_url "$URL"
+    URL="http://localhost:$ADMINER_PORT"
+    _info "Opening Adminer: ${URL}?_hatch=$(_urlencode "$WORKSPACE_NAME")"
+    _open_url "${URL}?_hatch=$(_urlencode "$WORKSPACE_NAME")"
     ;;
   
   dump)

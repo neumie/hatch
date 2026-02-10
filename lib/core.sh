@@ -46,6 +46,23 @@ _md5() {
   fi
 }
 
+# Percent-encode a string for use in URL query parameters
+_urlencode() {
+  local LC_ALL=C
+  local string="$1"
+  local length=${#string}
+  local encoded=""
+  local i c
+  for (( i = 0; i < length; i++ )); do
+    c="${string:i:1}"
+    case "$c" in
+      [a-zA-Z0-9.~_-]) encoded+="$c" ;;
+      *) encoded+=$(printf '%%%02X' "$(( $(printf '%d' "'$c") & 0xFF ))") ;;
+    esac
+  done
+  printf '%s' "$encoded"
+}
+
 # Open URL in default browser
 _open_url() {
   if [[ "$HATCH_PLATFORM" == "darwin" ]]; then

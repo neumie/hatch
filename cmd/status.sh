@@ -52,7 +52,7 @@ if [[ $MD_OUTPUT -eq 1 ]]; then
       name=$(echo "$service_spec" | cut -d: -f1)
       port=$(hatch_resolve_port "$name" 2>/dev/null || echo "")
       if [[ -n "$port" ]]; then
-        url="http://localhost:$port#hatch:$WORKSPACE_NAME"
+        url="http://localhost:$port?_hatch=$(_urlencode "$WORKSPACE_NAME")"
         if _check_port "$port"; then
           status="running"
         else
@@ -85,7 +85,7 @@ if [[ $MD_OUTPUT -eq 1 ]]; then
       name=$(echo "$server_spec" | cut -d: -f1)
       port=$(hatch_resolve_port "$name" 2>/dev/null || echo "")
       if [[ -n "$port" ]]; then
-        url="http://localhost:$port#hatch:$WORKSPACE_NAME"
+        url="http://localhost:$port?_hatch=$(_urlencode "$WORKSPACE_NAME")"
         status="stopped"
         if [[ -f .hatch/pids ]]; then
           while IFS=: read -r pname ppid pport pdir; do
@@ -151,7 +151,7 @@ if [[ $MD_OUTPUT -eq 1 ]]; then
     port=$(hatch_resolve_port "$name" 2>/dev/null || echo "")
     if [[ -n "$port" ]]; then
       has_urls=1
-      url_lines="${url_lines}- **$name:** http://localhost:$port#hatch:$WORKSPACE_NAME
+      url_lines="${url_lines}- **$name:** http://localhost:$port?_hatch=$(_urlencode "$WORKSPACE_NAME")
 "
     fi
   done < <(_parse_services DOCKER_SERVICES; _parse_services DOCKER_EXTRAS; _parse_services DEV_SERVERS)
@@ -221,7 +221,7 @@ else
     name=$(echo "$service_spec" | cut -d: -f1)
     port=$(hatch_resolve_port "$name" 2>/dev/null || echo "")
     if [[ -n "$port" ]]; then
-      echo "  $name: http://localhost:$port#hatch:$WORKSPACE_NAME"
+      echo "  $name: http://localhost:$port?_hatch=$(_urlencode "$WORKSPACE_NAME")"
     fi
   done < <(_parse_services DOCKER_SERVICES; _parse_services DOCKER_EXTRAS; _parse_services DEV_SERVERS)
 fi
