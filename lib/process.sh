@@ -25,11 +25,10 @@ _stop_targeted_servers() {
     if [[ $should_stop -eq 1 ]]; then
       _info "Stopping $name (PID: $pid)"
       if kill -0 "$pid" 2>/dev/null; then
-        kill -TERM -"$pid" 2>/dev/null || true
+        # Kill via tree walk (not process group — targeted stop must not affect other servers)
         _kill_tree "$pid"
         sleep 0.5
         if kill -0 "$pid" 2>/dev/null; then
-          kill -KILL -"$pid" 2>/dev/null || true
           _kill_tree "$pid" 9
         fi
       fi
@@ -168,8 +167,13 @@ hatch_stop_servers() {
     _info "Stopping $name (PID: $pid)"
 
     if kill -0 "$pid" 2>/dev/null; then
-      # Layer 1: Kill the process group (PGID == PID for background subshells)
-      kill -TERM -"$pid" 2>/dev/null || true
+      # Layer 1: Kill the process group via actual PGID lookup
+      # (subshells inherit parent's PGID, so PID != PGID)
+      local pgid
+      pgid=$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d ' ') || true
+      if [[ -n "$pgid" && "$pgid" != "0" && "$pgid" != "$$" ]]; then
+        kill -TERM -"$pgid" 2>/dev/null || true
+      fi
 
       # Layer 2: Kill the tree via parent-child walk
       _kill_tree "$pid"
@@ -179,7 +183,9 @@ hatch_stop_servers() {
 
       # Force kill if root is still running
       if kill -0 "$pid" 2>/dev/null; then
-        kill -KILL -"$pid" 2>/dev/null || true
+        if [[ -n "$pgid" && "$pgid" != "0" && "$pgid" != "$$" ]]; then
+          kill -KILL -"$pgid" 2>/dev/null || true
+        fi
         _kill_tree "$pid" 9
       fi
     fi
@@ -201,7 +207,21 @@ hatch_stop_servers() {
 
   # Remove pid file
   rm -f .hatch/pids
+
+  # Final sweep: catch any remaining orphans from the project root
+  # (covers processes spawned from root node_modules/ that individual
+  # server-directory sweeps above may have missed)
+  _sweep_workspace_processes "."
+
   _success "All servers stopped"
+}
+
+# hatch_sweep_orphans
+# Standalone orphan sweep that works without .hatch/pids.
+# Finds and kills any processes whose command line references the current
+# workspace directory. Safe to call repeatedly.
+hatch_sweep_orphans() {
+  _sweep_workspace_processes "."
 }
 
 # _kill_tree PID [SIGNAL]
@@ -249,16 +269,17 @@ _force_free_port() {
 }
 
 # _sweep_workspace_processes DIRECTORY
-# Last-resort cleanup: finds processes whose binary path lives inside DIRECTORY
-# (typically node_modules/.../esbuild) and kills them. Avoids false positives by
-# matching only processes whose executable path starts with the absolute workspace dir.
+# Last-resort cleanup: finds processes whose command line references DIRECTORY
+# (e.g. node_modules binaries like esbuild, or node processes running workspace scripts).
+# Matches the absolute directory path anywhere in the command line to catch both
+# native binaries (esbuild, workerd) and node-invoked scripts (vite, wrangler).
 _sweep_workspace_processes() {
   local directory="$1"
   local abs_dir
   abs_dir=$(cd "$directory" 2>/dev/null && pwd) || return 0
 
   local orphan_pids
-  orphan_pids=$(pgrep -f "^${abs_dir}/" 2>/dev/null) || true
+  orphan_pids=$(pgrep -f "${abs_dir}/" 2>/dev/null) || true
   [[ -z "$orphan_pids" ]] && return 0
 
   local p
@@ -269,7 +290,7 @@ _sweep_workspace_processes() {
   done
   sleep 0.3
 
-  orphan_pids=$(pgrep -f "^${abs_dir}/" 2>/dev/null) || true
+  orphan_pids=$(pgrep -f "${abs_dir}/" 2>/dev/null) || true
   for p in $orphan_pids; do
     [[ "$p" == "$$" ]] && continue
     kill -KILL "$p" 2>/dev/null || true
