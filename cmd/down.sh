@@ -80,6 +80,10 @@ fi
 # Release port registry entry
 _port_registry_release "$WORKSPACE_NAME" 2>/dev/null || true
 
+# Final orphan sweep — catches processes that survived all previous cleanup
+# (works without .hatch/pids by scanning the workspace directory in process args)
+hatch_sweep_orphans
+
 # Clean up runtime state only
 _info "Cleaning up runtime state"
 rm -f .hatch/pids 2>/dev/null && echo "  Removed .hatch/pids"
