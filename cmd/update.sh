@@ -23,6 +23,17 @@ if [[ -d "$HATCH_HOME/.git" ]]; then
   else
     _success "Updated to latest commit"
   fi
+
+  # Symlink Claude Code commands
+  if [[ -d "$HATCH_HOME/commands" ]]; then
+    mkdir -p "$HOME/.claude/commands"
+    for cmd_file in "$HATCH_HOME"/commands/*.md; do
+      [[ -f "$cmd_file" ]] || continue
+      local_name=$(basename "$cmd_file")
+      ln -sf "$cmd_file" "$HOME/.claude/commands/$local_name"
+    done
+    _success "Updated Claude Code commands"
+  fi
 else
   _warn "HATCH_HOME is not a git repository"
   _info "To enable updates, clone from git:"
