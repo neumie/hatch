@@ -13,6 +13,7 @@ COMMANDS:
   restart [services...] Restart dev servers (keeps Docker running)
   stop               Stop all services (dev servers + Docker, keeps containers)
   down [--force]     Tear down workspace (remove containers, volumes, release ports)
+  reset              Reset workspace (tear down + full setup)
   status [--md]      Show status of Docker and dev servers
   logs [services...] View Docker service logs (all or specific services)
   open [service]     Open service URL in browser
