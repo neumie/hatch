@@ -22,7 +22,7 @@ fi
 
 # Dispatch to command handler
 case "$COMMAND" in
-  setup|up|stop|down|restart|status|logs|open|db|migrate|export|seed|init|doctor|update|help)
+  setup|up|stop|down|restart|reset|status|logs|open|db|migrate|export|seed|init|doctor|update|help)
     source "$HATCH_HOME/cmd/${COMMAND}.sh"
     ;;
   "")
