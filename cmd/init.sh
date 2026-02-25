@@ -454,7 +454,7 @@ _header "Generating Config"
     echo ""
     echo "# Dynamic port injection into config files"
     echo "# Format: \"file_path:VAR_NAME=value_with_{PORT_servicename}_placeholder\""
-    echo "# Tip: run /hatch-init in Claude Code to auto-configure this section"
+    echo "# Tip: use your AI coding assistant with ~/.hatch/prompts/hatch-init.md to auto-configure"
     echo "PORT_TEMPLATES=\""
     echo "\""
   fi
@@ -472,7 +472,7 @@ _header "Generating Config"
   if [[ -n "$_CFG_MCP_SERVERS" ]]; then
     echo ""
     echo "# MCP environment variables (supports {PORT_servicename} placeholders)"
-    echo "# Tip: run /hatch-init in Claude Code to auto-configure this section"
+    echo "# Tip: use your AI coding assistant with ~/.hatch/prompts/hatch-init.md to auto-configure"
     echo "MCP_ENV=\""
     echo "\""
   fi
@@ -521,7 +521,7 @@ echo ""
 # Summary
 echo "Next steps:"
 if [[ -n "$_CFG_DOCKER_SERVICES" ]] || [[ -n "$_CFG_MCP_SERVERS" ]]; then
-  echo "  1. Run /hatch-init in Claude Code to configure PORT_TEMPLATES, SECRETS, and MCP_ENV"
+  echo "  1. Use your AI assistant with ~/.hatch/prompts/hatch-init.md to configure PORT_TEMPLATES, SECRETS, and MCP_ENV"
   echo "  2. Run: hatch setup"
 else
   echo "  1. Review $_CFG_SAVE_PATH and add any missing configuration"
