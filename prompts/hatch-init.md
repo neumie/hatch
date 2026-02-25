@@ -26,10 +26,11 @@ For each empty/missing section, scan the project to build intelligent suggestion
 - Look for variable names referencing docker services (e.g., `*_API_URL`, `*_DATABASE_URL`)
 - For each match, suggest a PORT_TEMPLATE entry replacing the hardcoded port with `{PORT_servicename}`
 
-**SECRETS** (static env vars):
-- In the same env files, identify values that are NOT URLs with ports — these are likely static secrets
-- Common patterns: session tokens, project names, mode flags, API keys
-- Suggest SECRETS entries for values that should be consistent across workspaces
+**SECRETS** (non-sensitive, development-only static values):
+- In the same env files, identify values that are NOT URLs with ports and are safe to commit to git
+- Common patterns: placeholder tokens (all-zeros like `0000000000000000000000000000000000000000`), project names, mode flags (`MODE=local`)
+- **Never** include real API keys, credentials, passwords, or service tokens — if a value looks like a real credential (e.g., Cloudflare, Postmark, AWS, OAuth keys), skip it and ensure the file is listed in SECRET_FILES instead
+- Suggest SECRETS entries only for values that are both consistent across workspaces AND safe to store in hatch.conf (which is committed to git)
 
 **MCP_ENV**:
 - If MCP_SERVERS is configured, the MCP server likely needs environment variables
@@ -49,9 +50,10 @@ For each empty/missing section, scan the project to build intelligent suggestion
 - For each auto-detected dev server, check if any env file actually references its port (via `PORT_<servername>` pattern or `localhost:<port>`)
 - Flag servers that nothing depends on and ask the user whether they're actually needed — auto-detection may be over-inclusive
 
-**SECRET_FILES**:
+**SECRET_FILES** (the mechanism for sensitive values):
 - List env files that should be preserved across workspaces via `~/.config/hatch/secrets/`
 - These are typically the same files targeted by PORT_TEMPLATES and SECRETS
+- **Any env file containing real API keys, credentials, or service tokens MUST be listed here** — this is how sensitive values are shared across workspaces without being written into hatch.conf. The user populates these files once, runs `hatch seed`, and subsequent workspaces get them via symlinks
 - Also check `.hatch/` for env files used by hooks (e.g., `.hatch/.env.local` for hook configuration like `DEV_EMAIL_DOMAIN`)
 
 ### Step 3.5: Hooks & Setup Workflow
