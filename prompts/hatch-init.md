@@ -56,6 +56,11 @@ For each empty/missing section, scan the project to build intelligent suggestion
 - **Any env file containing real API keys, credentials, or service tokens MUST be listed here** — this is how sensitive values are shared across workspaces without being written into hatch.conf. The user populates these files once, runs `hatch seed`, and subsequent workspaces get them via symlinks
 - Also check `.hatch/` for env files used by hooks (e.g., `.hatch/.env.local` for hook configuration like `DEV_EMAIL_DOMAIN`)
 
+**Docker-based CLIs** (critical for hooks generation):
+- Read `package.json` `scripts`; identify any that wrap `docker compose run` (e.g., `"contember": "docker compose run --rm contember-cli"`)
+- For each, note the Docker service name and cross-reference with `docker-compose.yml` to discover: pre-configured env vars, volume mounts (determines file path accessibility), and available commands
+- This determines how CLI commands work in hooks — the container already has env vars configured, and only volume-mounted paths are accessible
+
 ### Step 3.5: Hooks & Setup Workflow
 
 Ask the user about their setup workflow beyond the basics. Suggest common patterns:
@@ -87,16 +92,19 @@ If any `custom:` steps, `DATA_IMPORT_CMD`, or `DATA_EXPORT_CMD` were configured,
 
 **Process:**
 1. Read the project's existing code to understand APIs, endpoints, and service interactions
-2. For each function needed (`DATA_IMPORT_CMD`, `DATA_EXPORT_CMD`, `custom:*` functions), write a working implementation based on project context
-3. Use the hatch hooks API (see reference below) for port resolution and logging
-4. Place the file where `HOOKS_FILE` points (typically project root or `.hatch/`)
+2. Validate CLI invocations: check `package.json` scripts and `docker-compose.yml` to confirm correct command syntax, available subcommands, and pre-configured environment variables. Never guess CLI flags — verify they exist.
+3. For each function needed (`DATA_IMPORT_CMD`, `DATA_EXPORT_CMD`, `custom:*` functions), write a working implementation based on project context
+4. Use the hatch hooks API (see reference below) for port resolution and logging
+5. Place the file where `HOOKS_FILE` points (typically project root or `.hatch/`)
 
 **The hooks file must:**
 - Implement every function referenced by `SETUP_STEPS` `custom:*` entries, `DATA_IMPORT_CMD`, and `DATA_EXPORT_CMD`
 - Use `hatch_resolve_port` (bash) or `process.env.HATCH_PORT_<name>` (TS) for dynamic ports — never hardcode ports
 - Use `_docker_host` (bash) or platform detection (TS) when services inside Docker need to reach the host
 - Handle errors gracefully — log warnings rather than crashing setup for non-critical failures
-- Use `_pkg_run` (bash) for running package manager commands (e.g., `_pkg_run contember data:export`)
+- `_pkg_run`: use for commands defined in `package.json` scripts (e.g., `_pkg_run contember data:export` when `"contember"` is a script). Do NOT use for arbitrary node_modules binaries — use `npx` / `bunx` for those (e.g., `npx tsx`, `npx prisma`). To decide: check `package.json` scripts.
+- For Docker-wrapped CLIs (script runs `docker compose run`): the container has its own env vars — never pass redundant flags (e.g., `--api-url`, `--api-token`). File paths must be project-relative (within volume mount).
+- For data import hooks with Docker CLIs: the export file path (`$1`) is an absolute host path outside the volume mount — prefer using the service's HTTP API directly (see example), or copy the file into the project dir first
 
 ## Hooks File Reference
 
@@ -120,7 +128,7 @@ _die "Fatal error"          # Red [error] prefix, then exit 1
 
 **Other utilities:**
 ```bash
-_pkg_run command args...    # Runs via project's package manager (yarn/npm/bun/pnpm)
+_pkg_run command args...    # Run package.json scripts via package manager (NOT for arbitrary binaries — use npx for those)
 _docker_host                # Returns host address reachable from Docker (host.docker.internal on macOS)
 ```
 
@@ -336,6 +344,8 @@ DB_NAME="contember"
 
 DATA_IMPORT_CMD="crane_rental_import"
 DATA_EXPORT_CMD="crane_rental_export"
+# ^ Import uses HTTP API (curl) to avoid Docker volume mount path issues
+# ^ Export uses _pkg_run — works because hatch creates export_path in project dir
 
 SETUP_STEPS="docker:up deps:install migrate:execute_until data:import migrate:execute custom:crane_rental_setup"
 
