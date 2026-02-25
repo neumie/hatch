@@ -23,6 +23,39 @@ if [[ -d "$HATCH_HOME/.git" ]]; then
   else
     _success "Updated to latest commit"
   fi
+
+  # Install AI commands/rules for detected providers
+  if [[ -d "$HATCH_HOME/commands" ]]; then
+    # Claude Code
+    if [[ -d "$HOME/.claude" ]]; then
+      mkdir -p "$HOME/.claude/commands"
+      for cmd_file in "$HATCH_HOME"/commands/*.md; do
+        [[ -f "$cmd_file" ]] || continue
+        ln -sf "$cmd_file" "$HOME/.claude/commands/$(basename "$cmd_file")"
+      done
+      _success "Installed commands for Claude Code"
+    fi
+
+    # Cursor
+    if [[ -d "$HOME/.cursor" ]]; then
+      mkdir -p "$HOME/.cursor/rules"
+      for prompt_file in "$HATCH_HOME"/prompts/*.md; do
+        [[ -f "$prompt_file" ]] || continue
+        ln -sf "$prompt_file" "$HOME/.cursor/rules/$(basename "$prompt_file")"
+      done
+      _success "Installed rules for Cursor"
+    fi
+
+    # Windsurf
+    if [[ -d "$HOME/.windsurf" ]]; then
+      mkdir -p "$HOME/.windsurf/rules"
+      for prompt_file in "$HATCH_HOME"/prompts/*.md; do
+        [[ -f "$prompt_file" ]] || continue
+        ln -sf "$prompt_file" "$HOME/.windsurf/rules/$(basename "$prompt_file")"
+      done
+      _success "Installed rules for Windsurf"
+    fi
+  fi
 else
   _warn "HATCH_HOME is not a git repository"
   _info "To enable updates, clone from git:"
