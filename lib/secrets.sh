@@ -125,8 +125,13 @@ hatch_link_secrets() {
 
     if [[ $is_template -eq 1 ]]; then
       # Copy file (will be modified by hatch_inject_ports)
-      cp "$secret_file" "$target_path"
-      _info "Copied (template): $rel_path"
+      # Skip if source and target are the same file (already copied/linked)
+      if [[ "$secret_file" -ef "$target_path" ]]; then
+        _info "Skipped (already exists): $rel_path"
+      else
+        cp "$secret_file" "$target_path"
+        _info "Copied (template): $rel_path"
+      fi
     else
       # Create symlink
       # Remove existing symlink or file if present
