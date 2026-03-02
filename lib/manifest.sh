@@ -73,6 +73,15 @@ hatch_load_manifest() {
 
   _info "Loading manifest: $manifest_file"
 
+  # Pre-source secret env files so shell variables in the manifest can expand
+  local _pre_secrets="$HATCH_SECRETS/$project_name"
+  if [[ -d "$_pre_secrets" ]]; then
+    while IFS= read -r _sf; do
+      [[ -f "$_sf" ]] || continue
+      set +u; source "$_sf" 2>/dev/null || true; set -u
+    done < <(find "$_pre_secrets" -maxdepth 2 \( -name '.env' -o -name '*.env' \) 2>/dev/null)
+  fi
+
   # Source the manifest
   # shellcheck disable=SC1090
   source "$manifest_file"
