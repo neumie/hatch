@@ -21,6 +21,15 @@ _info "Project: $PROJECT_NAME"
 _info "Workspace: $WORKSPACE_NAME"
 echo ""
 
+# Pre-source secret env files so variables are available for manifest expansion
+_pre_secrets="$HATCH_SECRETS/$PROJECT_NAME"
+if [[ -d "$_pre_secrets" ]]; then
+  while IFS= read -r _sf; do
+    [[ -f "$_sf" ]] || continue
+    set +u; source "$_sf" 2>/dev/null || true; set -u
+  done < <(find "$_pre_secrets" -maxdepth 2 \( -name '.env' -o -name '*.env' \) 2>/dev/null)
+fi
+
 # Load manifest
 hatch_load_manifest "$PROJECT_NAME"
 

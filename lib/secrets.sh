@@ -111,7 +111,7 @@ hatch_link_secrets() {
     # Check if this file is in PORT_TEMPLATES
     local is_template=0
     local template_entry
-    for template_entry in "${template_files[@]}"; do
+    for template_entry in ${template_files[@]+"${template_files[@]}"}; do
       if [[ "$rel_path" == "$template_entry" ]]; then
         is_template=1
         break
