@@ -79,7 +79,7 @@ hatch_load_manifest() {
     while IFS= read -r _sf; do
       [[ -f "$_sf" ]] || continue
       set +u; source "$_sf" 2>/dev/null || true; set -u
-    done < <(find "$_pre_secrets" -maxdepth 2 \( -name '.env' -o -name '*.env' \) 2>/dev/null)
+    done < <(find "$_pre_secrets" \( -name '.env' -o -name '*.env' \) 2>/dev/null)
   fi
 
   # Source the manifest
