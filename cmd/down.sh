@@ -89,5 +89,13 @@ _info "Cleaning up runtime state"
 rm -f .hatch/pids 2>/dev/null && echo "  Removed .hatch/pids"
 rm -f .hatch/*.log 2>/dev/null && echo "  Removed .hatch/*.log"
 
+# Call post_down hook if exists
+hatch_load_hooks 2>/dev/null || true
+if type post_down &>/dev/null; then
+  echo ""
+  _info "Running post_down hook"
+  post_down
+fi
+
 echo ""
 _success "Tear down complete"
