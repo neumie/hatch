@@ -29,16 +29,8 @@ echo ""
 
 # Check if Docker daemon is responsive (3s timeout, avoids hanging)
 DOCKER_AVAILABLE=false
-if command -v docker >/dev/null 2>&1; then
-  docker info >/dev/null 2>&1 &
-  _docker_pid=$!
-  ( sleep 3 && kill "$_docker_pid" 2>/dev/null ) &
-  _killer_pid=$!
-  if wait "$_docker_pid" 2>/dev/null; then
-    DOCKER_AVAILABLE=true
-  fi
-  kill "$_killer_pid" 2>/dev/null
-  wait "$_killer_pid" 2>/dev/null
+if _docker_responsive 3; then
+  DOCKER_AVAILABLE=true
 fi
 
 # Show what will be removed

@@ -2,6 +2,31 @@
 # docker.sh - Docker Compose management
 # Depends on: core.sh, manifest.sh, ports.sh
 
+# _docker_responsive [TIMEOUT_SECS]
+# Returns 0 if Docker daemon responds within timeout (default 3s), 1 otherwise.
+_docker_responsive() {
+  local timeout="${1:-3}"
+
+  if ! command -v docker >/dev/null 2>&1; then
+    return 1
+  fi
+
+  docker info >/dev/null 2>&1 &
+  local _docker_pid=$!
+  ( sleep "$timeout" && kill "$_docker_pid" 2>/dev/null ) &
+  local _killer_pid=$!
+
+  if wait "$_docker_pid" 2>/dev/null; then
+    kill "$_killer_pid" 2>/dev/null || true
+    wait "$_killer_pid" 2>/dev/null || true
+    return 0
+  else
+    kill "$_killer_pid" 2>/dev/null || true
+    wait "$_killer_pid" 2>/dev/null || true
+    return 1
+  fi
+}
+
 # hatch_write_env WORKSPACE_NAME
 # Writes .env file with WORKSPACE_NAME and all PORT_* variables
 # Used for Docker Compose variable interpolation
@@ -177,9 +202,9 @@ hatch_docker_up() {
     _die "Docker not found. Install Docker Desktop or Docker Engine."
   fi
 
-  # Check if docker daemon is running
-  if ! docker info >/dev/null 2>&1; then
-    _die "Docker daemon is not running. Start Docker Desktop or the Docker service."
+  # Check if docker daemon is running (with timeout to avoid hanging)
+  if ! _docker_responsive 5; then
+    _die "Docker daemon is not responding. Start Docker Desktop or the Docker service."
   fi
 
   # Run docker compose up, capturing stderr for error analysis
@@ -309,11 +334,7 @@ hatch_docker_status() {
 # Returns 0 if docker services are running, 1 otherwise
 # Useful for conditional checks
 hatch_docker_running() {
-  if ! command -v docker >/dev/null 2>&1; then
-    return 1
-  fi
-
-  if ! docker info >/dev/null 2>&1; then
+  if ! _docker_responsive 3; then
     return 1
   fi
 
