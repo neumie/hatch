@@ -27,13 +27,29 @@ _info "Workspace: $WORKSPACE_NAME"
 _info "Directory: $(pwd)"
 echo ""
 
-# Show what will be removed
+# Check if Docker daemon is responsive (3s timeout, avoids hanging)
+DOCKER_AVAILABLE=false
 if command -v docker >/dev/null 2>&1; then
+  docker info >/dev/null 2>&1 &
+  _docker_pid=$!
+  ( sleep 3 && kill "$_docker_pid" 2>/dev/null ) &
+  _killer_pid=$!
+  if wait "$_docker_pid" 2>/dev/null; then
+    DOCKER_AVAILABLE=true
+  fi
+  kill "$_killer_pid" 2>/dev/null
+  wait "$_killer_pid" 2>/dev/null
+fi
+
+# Show what will be removed
+if [[ "$DOCKER_AVAILABLE" == "true" ]]; then
   echo "Containers to remove:"
-  docker ps -a --filter "name=${WORKSPACE_NAME}-" --format "  {{.Names}} ({{.Status}})" 2>/dev/null || echo "  (none found)"
+  _output=$(docker ps -a --filter "name=${WORKSPACE_NAME}-" --format "  {{.Names}} ({{.Status}})" 2>/dev/null) || true
+  echo "${_output:-  (none found)}"
   echo ""
   echo "Volumes to remove:"
-  docker volume ls --filter "name=${WORKSPACE_NAME}" --format "  {{.Name}}" 2>/dev/null || echo "  (none found)"
+  _output=$(docker volume ls --filter "name=${WORKSPACE_NAME}" --format "  {{.Name}}" 2>/dev/null) || true
+  echo "${_output:-  (none found)}"
   echo ""
 fi
 
@@ -57,7 +73,7 @@ if [[ -f .hatch/pids ]]; then
 fi
 
 # Stop Docker services and remove containers + volumes
-if command -v docker >/dev/null 2>&1; then
+if [[ "$DOCKER_AVAILABLE" == "true" ]]; then
   _info "Stopping Docker services"
   docker compose -p "$WORKSPACE_NAME" down -v --remove-orphans 2>&1 || true
 
