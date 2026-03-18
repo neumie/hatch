@@ -52,7 +52,7 @@ export async function acme_app_remote_export(exportPath: string) {
   const pkgCmd = process.env.PACKAGE_MANAGER === "bun" ? "bunx" : "npx";
   // url: contember://project@host → contember://project:token@host
   const uri = url.replace("@", `:${token}@`);
-  execFileSync(pkgCmd, ["contember", "data:export", "--output", exportPath, uri], {
+  execFileSync(pkgCmd, ["contember", "data:export", uri, "--output", exportPath], {
     stdio: "inherit",
   });
 }
