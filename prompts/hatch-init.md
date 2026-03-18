@@ -98,7 +98,7 @@ If any `custom:` steps, `DATA_IMPORT_CMD`, or `DATA_EXPORT_CMD` were configured,
 5. Place the file where `HOOKS_FILE` points (typically project root or `.hatch/`)
 
 **The hooks file must:**
-- Implement every function referenced by `SETUP_STEPS` `custom:*` entries, `DATA_IMPORT_CMD`, and `DATA_EXPORT_CMD`
+- Implement every function referenced by `SETUP_STEPS` `custom:*` entries, `DATA_IMPORT_CMD`, `DATA_EXPORT_CMD`, and `DATA_REMOTE_EXPORT_CMD`
 - Use `hatch_resolve_port` (bash) or `process.env.HATCH_PORT_<name>` (TS) for dynamic ports — never hardcode ports
 - Use `_docker_host` (bash) or platform detection (TS) when services inside Docker need to reach the host
 - Handle errors gracefully — log warnings rather than crashing setup for non-critical failures
@@ -147,6 +147,13 @@ my_export() {
   # ... export logic writing to $export_path
 }
 
+# DATA_REMOTE_EXPORT_CMD — receives export file path as $1
+# HATCH_REMOTE_URL and HATCH_REMOTE_TOKEN are set as env vars
+my_remote_export() {
+  local export_path="$1"
+  # ... remote export logic using $HATCH_REMOTE_URL and $HATCH_REMOTE_TOKEN
+}
+
 # custom:my_setup — no arguments, called during setup
 my_setup() {
   local port=$(hatch_resolve_port "service-name")
@@ -186,6 +193,15 @@ export async function my_import(exportFile: string) {
 export async function my_export(exportPath: string) {
   const { execFileSync } = await import("child_process");
   // ... export logic writing to exportPath
+}
+
+// DATA_REMOTE_EXPORT_CMD — HATCH_REMOTE_URL and HATCH_REMOTE_TOKEN set as env vars
+export async function my_remote_export(exportPath: string) {
+  const url = process.env.HATCH_REMOTE_URL!;
+  const token = process.env.HATCH_REMOTE_TOKEN!;
+  // ... remote export logic, e.g. for Contember:
+  // const uri = url.replace("@", `:${token}@`);
+  // execSync(`yarn contember data:export --output ${exportPath} ${uri}`);
 }
 
 // custom:my_setup
@@ -263,6 +279,21 @@ DATA_EXPORT_CMD="function_name"
 - Called by `data:import` and `data:export` setup steps
 - Import receives the export file path as first argument
 - Export receives a temp file path to write to
+- Functions must be defined in the hooks file (`HOOKS_FILE`)
+
+### DATA_REMOTE_EXPORT_CMD / DATA_REMOTE_ENVS
+Remote data export allows pulling data directly from production/staging without spinning up a local instance. Used via `hatch export --remote`.
+```
+DATA_REMOTE_EXPORT_CMD="function_name"
+DATA_REMOTE_ENVS="
+  prod contember://project-slug@api-host.contember.cloud
+  stage contember://project-slug-stage@api-host-stage.contember.cloud
+"
+```
+- `DATA_REMOTE_ENVS` lists named environments with their connection URIs (one per line, format: `name url`)
+- `DATA_REMOTE_EXPORT_CMD` is a hook function that receives the export file path as first argument
+- Before calling the hook, hatch sets `HATCH_REMOTE_URL` and `HATCH_REMOTE_TOKEN` as env vars
+- The user selects the environment interactively (or via `hatch export --remote prod`) and is prompted for a token
 - Functions must be defined in the hooks file (`HOOKS_FILE`)
 
 ### SETUP_STEPS
