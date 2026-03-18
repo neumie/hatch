@@ -47,14 +47,14 @@ export async function acme_app_export(exportPath: string) {
 
 export async function acme_app_remote_export(exportPath: string) {
   const { execFileSync } = await import("child_process");
-  const url = process.env.HATCH_REMOTE_URL;
-  const token = process.env.HATCH_REMOTE_TOKEN;
+  const url = process.env.HATCH_REMOTE_URL!;
+  const token = process.env.HATCH_REMOTE_TOKEN!;
   const pkgCmd = process.env.PACKAGE_MANAGER === "bun" ? "bunx" : "npx";
-  execFileSync(
-    pkgCmd,
-    ["contember", "data:export", "--output", exportPath, `${url}?token=${token}`],
-    { stdio: "inherit" },
-  );
+  // url: contember://project@host → contember://project:token@host
+  const uri = url.replace("@", `:${token}@`);
+  execFileSync(pkgCmd, ["contember", "data:export", "--output", exportPath, uri], {
+    stdio: "inherit",
+  });
 }
 
 export async function acme_app_setup() {
