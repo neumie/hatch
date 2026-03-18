@@ -782,6 +782,21 @@ export async function exportData(exportPath: string): Promise<void> {
     { stdio: "inherit" },
   );
 }
+
+export async function exportRemoteData(
+  exportPath: string,
+  remoteUrl: string,
+  token: string,
+): Promise<void> {
+  const { execSync } = await import("child_process");
+  // remoteUrl: contember://project@host → contember://project:token@host
+  const uri = remoteUrl.replace("@", `:${token}@`);
+  // Output path must end in .gz for the Contember CLI to produce gzipped output
+  execSync(
+    `{{PACKAGE_MANAGER}} contember data:export ${uri} --output ${JSON.stringify(exportPath)}`,
+    { stdio: "inherit" },
+  );
+}
 ```
 
 **Important:** The `importData` function always streams and automatically remaps any project slug that differs from the local `projectSlug`. It never buffers the full file in memory — it uses a Node.js Transform stream pipeline (`file → gunzip → line remapper → gzip → fetch`). The NDJSON format uses JSON array tuples: `["commandName", { project: "slug", ... }]` — the remapper parses this tuple format, not plain objects.
