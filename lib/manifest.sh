@@ -102,6 +102,8 @@ hatch_load_manifest() {
   DOCKER_ENV="${DOCKER_ENV:-}"
   SECRETS="${SECRETS:-}"
   SECRET_FILES="${SECRET_FILES:-}"
+  DATA_REMOTE_ENVS="${DATA_REMOTE_ENVS:-}"
+  DATA_REMOTE_EXPORT_CMD="${DATA_REMOTE_EXPORT_CMD:-}"
 
   # Export key variables for use in subshells
   export PROJECT_NAME
@@ -210,6 +212,7 @@ _load_ts_hooks() {
   # From DATA_IMPORT_CMD and DATA_EXPORT_CMD
   [[ -n "${DATA_IMPORT_CMD:-}" ]] && hook_names="$hook_names $DATA_IMPORT_CMD"
   [[ -n "${DATA_EXPORT_CMD:-}" ]] && hook_names="$hook_names $DATA_EXPORT_CMD"
+  [[ -n "${DATA_REMOTE_EXPORT_CMD:-}" ]] && hook_names="$hook_names $DATA_REMOTE_EXPORT_CMD"
 
   # Scan TS file for exported functions and arrow function exports
   # Matches: export function foo, export async function foo,

@@ -154,3 +154,41 @@ hatch_export_data() {
   mv "$tmp_export" "$export_path"
   _success "Data exported to: $export_path"
 }
+
+# hatch_export_remote_data
+# Exports data from a remote environment.
+# Expects HATCH_REMOTE_URL and HATCH_REMOTE_TOKEN to be set.
+# Uses DATA_REMOTE_EXPORT_CMD instead of DATA_EXPORT_CMD.
+hatch_export_remote_data() {
+  local data_dir="$HATCH_DATA/$PROJECT_NAME"
+
+  mkdir -p "$data_dir"
+
+  _header "Exporting data from remote"
+
+  local latest_version
+  latest_version=$(hatch_get_latest_migration) || latest_version="unknown"
+
+  local export_filename="export-${latest_version}.jsonl.gz"
+  local export_path="$data_dir/$export_filename"
+
+  if [[ -z "${DATA_REMOTE_EXPORT_CMD:-}" ]]; then
+    _die "DATA_REMOTE_EXPORT_CMD not set. Configure it in hatch.conf to export from remote environments."
+  fi
+
+  export HATCH_REMOTE_URL
+  export HATCH_REMOTE_TOKEN
+
+  _info "Exporting data (remote: $HATCH_REMOTE_URL)"
+  if ! eval "$DATA_REMOTE_EXPORT_CMD" "$export_path"; then
+    _error "Remote export command failed"
+    return 1
+  fi
+
+  if [[ ! -f "$export_path" ]]; then
+    _error "Export file not created"
+    return 1
+  fi
+
+  _success "Data exported to: $export_path"
+}
