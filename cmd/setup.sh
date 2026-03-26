@@ -44,7 +44,7 @@ if hatch_docker_running; then
 fi
 
 _info "Checking port availability..."
-if ! hatch_check_ports_smart "$WORKSPACE_NAME"; then
+if ! hatch_check_ports_smart "${PROJECT_NAME}-${WORKSPACE_NAME}"; then
   echo ""
   _warn "Port conflicts detected. Choose an option:"
   echo "  1) Kill conflicting processes and continue"
@@ -65,9 +65,9 @@ if ! hatch_check_ports_smart "$WORKSPACE_NAME"; then
   case "${_port_choice}" in
     1)
       _info "Killing conflicting processes..."
-      _kill_conflicting_ports "$WORKSPACE_NAME"
+      _kill_conflicting_ports "${PROJECT_NAME}-${WORKSPACE_NAME}"
       # Re-check after killing
-      if ! hatch_check_ports_smart "$WORKSPACE_NAME"; then
+      if ! hatch_check_ports_smart "${PROJECT_NAME}-${WORKSPACE_NAME}"; then
         _error "Some port conflicts remain after killing processes. Aborting."
         exit 1
       fi
@@ -94,7 +94,7 @@ if ! hatch_check_ports_smart "$WORKSPACE_NAME"; then
 fi
 
 # Write configuration files
-hatch_write_env "$WORKSPACE_NAME"
+hatch_write_env "$WORKSPACE_NAME" "$PROJECT_NAME"
 hatch_write_docker_override "$WORKSPACE_NAME"
 echo ""
 
@@ -105,6 +105,7 @@ hatch_inject_ports
 
 # Generate MCP configuration
 hatch_generate_mcp_config
+hatch_generate_remote_mcp_config
 echo ""
 
 # Load hooks before setup steps (custom steps and data import may use hook functions)
