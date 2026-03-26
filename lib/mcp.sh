@@ -150,3 +150,127 @@ hatch_generate_mcp_config() {
 
   _success "Written MCP servers to ~/.claude.json (project: $project_path)"
 }
+
+# hatch_generate_remote_mcp_config
+# Reads MCP_REMOTE_SERVERS from manifest and mcp/host/.mcp-tokens for auth
+# Writes remote (HTTP) MCP server config to ~/.claude.json (project-scoped)
+# MCP_REMOTE_SERVERS format: "name:url" (one per line)
+# Token file format: "profile=token" (one per line, profile extracted from server name suffix)
+hatch_generate_remote_mcp_config() {
+  if [[ -z "${MCP_REMOTE_SERVERS:-}" ]]; then
+    _info "No MCP_REMOTE_SERVERS defined, skipping remote MCP configuration"
+    return 0
+  fi
+
+  local token_file="mcp/host/.mcp-tokens"
+  if [[ ! -f "$token_file" ]]; then
+    _warn "Token file $token_file not found, skipping remote MCP configuration"
+    _warn "Create it with one 'profile=token' per line (e.g. stage=xxx)"
+    return 0
+  fi
+
+  _header "Generating remote MCP configuration"
+
+  # Parse token file into associative array
+  declare -A tokens
+  while IFS= read -r line; do
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    local tkey tval
+    tkey=$(echo "$line" | cut -d= -f1 | xargs)
+    tval=$(echo "$line" | cut -d= -f2- | xargs)
+    tokens["$tkey"]="$tval"
+  done < "$token_file"
+
+  # Build servers JSON
+  local servers_json='{'
+  local first_server=1
+
+  while IFS= read -r server_spec; do
+    [[ -z "$server_spec" ]] && continue
+
+    # Parse format: "name:url" (url may contain colons)
+    local name url
+    name=$(echo "$server_spec" | cut -d: -f1)
+    url=$(echo "$server_spec" | cut -d: -f2-)
+
+    # Extract profile from name (last segment after final hyphen)
+    local profile
+    profile="${name##*-}"
+
+    # Look up token
+    local token="${tokens[$profile]:-}"
+    if [[ -z "$token" ]]; then
+      _warn "No token found for profile '$profile' (server: $name), skipping"
+      continue
+    fi
+
+    # Comma separator between servers
+    if [[ $first_server -eq 1 ]]; then
+      first_server=0
+    else
+      servers_json="$servers_json,"
+    fi
+
+    # Build server entry with jq for proper escaping
+    local entry
+    entry=$(jq -n --arg url "$url" --arg token "$token" \
+      '{type: "http", url: $url, headers: {Authorization: ("Bearer " + $token)}}')
+
+    servers_json="$servers_json $(jq -n --arg name "$name" --argjson entry "$entry" '{($name): $entry}' | sed 's/^{//;s/}$//')"
+
+    _info "Configured remote MCP server: $name (profile: $profile)"
+  done < <(_parse_services MCP_REMOTE_SERVERS)
+
+  servers_json="$servers_json}"
+
+  # Validate we have at least one server
+  if [[ "$servers_json" == '{}' ]]; then
+    _warn "No remote MCP servers configured (missing tokens?)"
+    return 0
+  fi
+
+  # Write to ~/.claude.json under projects.<project_path>.mcpServers
+  # Merges with existing mcpServers (preserving local server entries)
+  local project_path
+  project_path=$(pwd -P)
+  local claude_json="$HOME/.claude.json"
+  local tmp_file="${claude_json}.tmp.$$"
+  local lock_dir="${claude_json}.lock"
+
+  _require jq "Install with: brew install jq (macOS) or apt install jq (Linux)"
+
+  # Acquire lock (mkdir is atomic on all filesystems)
+  local lock_attempts=0
+  while ! mkdir "$lock_dir" 2>/dev/null; do
+    lock_attempts=$((lock_attempts + 1))
+    if [[ $lock_attempts -ge 50 ]]; then
+      _die "Timed out waiting for lock on $claude_json (stale lock? remove $lock_dir)"
+    fi
+    sleep 0.1
+  done
+  # shellcheck disable=SC2064
+  trap "rmdir '$lock_dir' 2>/dev/null" EXIT
+
+  # Read existing config or start fresh
+  local existing='{}'
+  if [[ -f "$claude_json" ]]; then
+    if ! existing=$(jq '.' "$claude_json" 2>/dev/null); then
+      _warn "~/.claude.json contains invalid JSON, backing up to ~/.claude.json.bak"
+      cp "$claude_json" "${claude_json}.bak"
+      existing='{}'
+    fi
+  fi
+
+  # Merge remote servers into existing mcpServers (additive, preserves local entries)
+  echo "$existing" | jq --argjson servers "$servers_json" --arg path "$project_path" \
+    '.projects[$path].mcpServers = ((.projects[$path].mcpServers // {}) * $servers)' > "$tmp_file" \
+    || { rm -f "$tmp_file"; rmdir "$lock_dir" 2>/dev/null; _die "Failed to write remote MCP config"; }
+
+  mv "$tmp_file" "$claude_json"
+
+  # Release lock
+  rmdir "$lock_dir" 2>/dev/null
+  trap - EXIT
+
+  _success "Written remote MCP servers to ~/.claude.json (project: $project_path)"
+}

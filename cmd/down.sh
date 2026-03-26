@@ -36,11 +36,11 @@ fi
 # Show what will be removed
 if [[ "$DOCKER_AVAILABLE" == "true" ]]; then
   echo "Containers to remove:"
-  _output=$(docker ps -a --filter "name=${WORKSPACE_NAME}-" --format "  {{.Names}} ({{.Status}})" 2>/dev/null) || true
+  _output=$(docker ps -a --filter "name=${PROJECT_NAME}-${WORKSPACE_NAME}-" --format "  {{.Names}} ({{.Status}})" 2>/dev/null) || true
   echo "${_output:-  (none found)}"
   echo ""
   echo "Volumes to remove:"
-  _output=$(docker volume ls --filter "name=${WORKSPACE_NAME}" --format "  {{.Name}}" 2>/dev/null) || true
+  _output=$(docker volume ls --filter "name=${PROJECT_NAME}-${WORKSPACE_NAME}" --format "  {{.Name}}" 2>/dev/null) || true
   echo "${_output:-  (none found)}"
   echo ""
 fi
@@ -67,17 +67,17 @@ fi
 # Stop Docker services and remove containers + volumes
 if [[ "$DOCKER_AVAILABLE" == "true" ]]; then
   _info "Stopping Docker services"
-  docker compose -p "$WORKSPACE_NAME" down -v --remove-orphans 2>&1 || true
+  docker compose -p "${PROJECT_NAME}-${WORKSPACE_NAME}" down -v --remove-orphans 2>&1 || true
 
   # Force remove any remaining containers
-  CONTAINERS=$(docker ps -aq --filter "name=${WORKSPACE_NAME}-" 2>/dev/null)
+  CONTAINERS=$(docker ps -aq --filter "name=${PROJECT_NAME}-${WORKSPACE_NAME}-" 2>/dev/null)
   if [[ -n "$CONTAINERS" ]]; then
     _info "Removing containers"
     echo "$CONTAINERS" | xargs docker rm -f 2>/dev/null || true
   fi
 
   # Remove volumes
-  VOLUMES=$(docker volume ls -q --filter "name=${WORKSPACE_NAME}" 2>/dev/null)
+  VOLUMES=$(docker volume ls -q --filter "name=${PROJECT_NAME}-${WORKSPACE_NAME}" 2>/dev/null)
   if [[ -n "$VOLUMES" ]]; then
     _info "Removing volumes"
     echo "$VOLUMES" | xargs docker volume rm 2>/dev/null || true
