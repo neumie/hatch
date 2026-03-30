@@ -27,6 +27,14 @@ _info "Workspace: $WORKSPACE_NAME"
 _info "Directory: $(pwd)"
 echo ""
 
+# Determine the Docker Compose project name (must match what was used during setup)
+# Priority: COMPOSE_PROJECT_NAME from .env > directory basename (Docker Compose default)
+if [[ -f .env ]] && grep -q '^COMPOSE_PROJECT_NAME=' .env 2>/dev/null; then
+  COMPOSE_PROJECT=$(grep '^COMPOSE_PROJECT_NAME=' .env | head -1 | cut -d= -f2)
+else
+  COMPOSE_PROJECT=$(basename "$(pwd)")
+fi
+
 # Check if Docker daemon is responsive (3s timeout, avoids hanging)
 DOCKER_AVAILABLE=false
 if _docker_responsive 3; then
@@ -40,7 +48,7 @@ if [[ "$DOCKER_AVAILABLE" == "true" ]]; then
   echo "${_output:-  (none found)}"
   echo ""
   echo "Volumes to remove:"
-  _output=$(docker volume ls --filter "name=${PROJECT_NAME}-${WORKSPACE_NAME}" --format "  {{.Name}}" 2>/dev/null) || true
+  _output=$(docker volume ls --filter "name=${COMPOSE_PROJECT}" --format "  {{.Name}}" 2>/dev/null) || true
   echo "${_output:-  (none found)}"
   echo ""
 fi
@@ -66,8 +74,8 @@ fi
 
 # Stop Docker services and remove containers + volumes
 if [[ "$DOCKER_AVAILABLE" == "true" ]]; then
-  _info "Stopping Docker services"
-  docker compose -p "${PROJECT_NAME}-${WORKSPACE_NAME}" down -v --remove-orphans 2>&1 || true
+  _info "Stopping Docker services (compose project: $COMPOSE_PROJECT)"
+  docker compose -p "${COMPOSE_PROJECT}" down -v --remove-orphans 2>&1 || true
 
   # Force remove any remaining containers
   CONTAINERS=$(docker ps -aq --filter "name=${PROJECT_NAME}-${WORKSPACE_NAME}-" 2>/dev/null)
@@ -76,8 +84,8 @@ if [[ "$DOCKER_AVAILABLE" == "true" ]]; then
     echo "$CONTAINERS" | xargs docker rm -f 2>/dev/null || true
   fi
 
-  # Remove volumes
-  VOLUMES=$(docker volume ls -q --filter "name=${PROJECT_NAME}-${WORKSPACE_NAME}" 2>/dev/null)
+  # Remove volumes matching the compose project name
+  VOLUMES=$(docker volume ls -q --filter "name=${COMPOSE_PROJECT}" 2>/dev/null)
   if [[ -n "$VOLUMES" ]]; then
     _info "Removing volumes"
     echo "$VOLUMES" | xargs docker volume rm 2>/dev/null || true
