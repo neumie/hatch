@@ -39,7 +39,9 @@ hatch_get_latest_migration() {
 }
 
 # hatch_get_export_version
-# Returns the version string from the latest export file, or fails if none found.
+# Returns the schema version from the latest export file by reading the embedded
+# schemaVersion from the first line (the importContentSchemaBegin header).
+# Falls back to filename-based version if parsing fails.
 hatch_get_export_version() {
   local data_dir="$HATCH_DATA/$PROJECT_NAME"
   local export_file
@@ -47,6 +49,16 @@ hatch_get_export_version() {
   if [[ -z "$export_file" ]]; then
     return 1
   fi
+
+  # Read schemaVersion from the export header (first JSON line)
+  local schema_version
+  schema_version=$(gunzip -c "$export_file" | head -1 | python3 -c "import sys,json; print(json.load(sys.stdin)[1]['schemaVersion'])" 2>/dev/null)
+  if [[ -n "$schema_version" ]]; then
+    echo "$schema_version"
+    return 0
+  fi
+
+  # Fallback to filename-based version
   basename "$export_file" | sed 's/^export-//' | sed 's/\.jsonl\.gz$//'
 }
 
@@ -55,11 +67,14 @@ hatch_get_export_version() {
 _resolve_migration_name() {
   local version="$1"
   local migrations_dir="${MIGRATIONS_DIR:?MIGRATIONS_DIR not set}"
-  local ext="${MIGRATIONS_FILE_EXT:?MIGRATIONS_FILE_EXT not set}"
   local match
-  match=$(find "$migrations_dir" -name "${version}-*.$ext" | head -1)
+  # Search for any file extension (migrations can be .json or .ts content migrations)
+  match=$(find "$migrations_dir" -name "${version}-*" -type f | head -1)
   if [[ -n "$match" ]]; then
-    basename "$match" ".$ext"
+    local base
+    base=$(basename "$match")
+    # Strip any extension
+    echo "${base%.*}"
   else
     _warn "No migration file matching version '$version' in $migrations_dir; using version as-is"
     echo "$version"
