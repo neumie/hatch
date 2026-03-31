@@ -28,10 +28,15 @@ _info "Directory: $(pwd)"
 echo ""
 
 # Determine the Docker Compose project name (must match what was used during setup)
-# Priority: COMPOSE_PROJECT_NAME from .env > directory basename (Docker Compose default)
-if [[ -f .env ]] && grep -q '^COMPOSE_PROJECT_NAME=' .env 2>/dev/null; then
-  COMPOSE_PROJECT=$(grep '^COMPOSE_PROJECT_NAME=' .env | head -1 | cut -d= -f2)
-else
+# Construct from PROJECT_NAME + WORKSPACE_NAME (same as hatch_write_env in setup)
+# Falls back to .env value or directory basename for legacy worktrees
+COMPOSE_PROJECT=""
+if [[ -n "${PROJECT_NAME:-}" && -n "${WORKSPACE_NAME:-}" ]]; then
+  COMPOSE_PROJECT="${PROJECT_NAME}-${WORKSPACE_NAME}"
+elif [[ -f .env ]]; then
+  COMPOSE_PROJECT=$(grep '^COMPOSE_PROJECT_NAME=' .env 2>/dev/null | head -1 | cut -d= -f2)
+fi
+if [[ -z "$COMPOSE_PROJECT" ]]; then
   COMPOSE_PROJECT=$(basename "$(pwd)")
 fi
 
