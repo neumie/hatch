@@ -243,6 +243,52 @@ _port_registry_list() {
 }
 
 # ---------------------------------------------------------------------------
+# Port Range Availability
+# ---------------------------------------------------------------------------
+
+# _port_range_available BASE_PORT
+# Returns 0 if the port range [BASE_PORT, BASE_PORT+HATCH_PORT_SPACING) is free
+# Returns 1 if any port in the range is occupied by a listening process
+# Uses a single lsof call with port range syntax for efficiency
+# Note: does not check docker port mappings (too slow for probing loop);
+# hatch_check_ports_smart handles those as a safety net after allocation
+_port_range_available() {
+  local base_port="$1"
+  local end_port=$((base_port + HATCH_PORT_SPACING - 1))
+
+  # Single lsof call for the entire range (works on macOS and Linux)
+  if command -v lsof >/dev/null 2>&1; then
+    if lsof -iTCP:"${base_port}-${end_port}" -sTCP:LISTEN -t >/dev/null 2>&1; then
+      return 1  # At least one port in range is occupied
+    fi
+  fi
+
+  # Linux: also check ss (catches cases lsof may miss)
+  if [[ "${HATCH_PLATFORM:-}" == "linux" ]] && command -v ss >/dev/null 2>&1; then
+    local ss_output
+    ss_output=$(ss -tlnH 2>/dev/null) || true
+    local port
+    for port in $(seq "$base_port" "$end_port"); do
+      if echo "$ss_output" | grep -qE ":${port}\b"; then
+        return 1
+      fi
+    done
+  fi
+
+  return 0  # Range is clean
+}
+
+# _workspace_owns_base_port BASE_PORT WORKSPACE_NAME
+# Returns 0 if this workspace already claims this base port in the registry
+# Used to skip OS-level range checks when re-running setup (own containers hold the ports)
+_workspace_owns_base_port() {
+  local base_port="$1"
+  local workspace_name="$2"
+  [[ ! -f "$HATCH_PORT_REGISTRY" ]] && return 1
+  grep -q "^${base_port}"$'\t'"${workspace_name}"$'\t' "$HATCH_PORT_REGISTRY" 2>/dev/null
+}
+
+# ---------------------------------------------------------------------------
 # Port Generation
 # ---------------------------------------------------------------------------
 
@@ -250,7 +296,7 @@ _port_registry_list() {
 # Generates BASE_PORT using MD5 hash algorithm with collision probing
 # If workspace_name == project_name: use DEFAULT_BASE_PORT (from manifest, default 1481)
 # If workspace_name != project_name: hash-based port block (range 10000-60000, spacing 20)
-#   with linear probing against the port registry to avoid collisions
+#   with linear probing against the port registry AND OS-level port usage
 # Sets global variable: BASE_PORT
 hatch_generate_ports() {
   local workspace_name="$1"
@@ -260,6 +306,13 @@ hatch_generate_ports() {
     # Main workspace - use default port
     BASE_PORT="${DEFAULT_BASE_PORT:-1481}"
     _info "Main workspace detected, using default base port: $BASE_PORT"
+
+    # Warn early if the main workspace port range has external conflicts
+    if ! _workspace_owns_base_port "$BASE_PORT" "$workspace_name" && \
+       ! _port_range_available "$BASE_PORT"; then
+      _warn "External process occupying port in range $BASE_PORT-$((BASE_PORT + HATCH_PORT_SPACING - 1))"
+      _warn "Port conflicts will be resolved after allocation"
+    fi
   else
     # Hash-based port allocation for isolated workspaces
     local hash
@@ -277,18 +330,32 @@ hatch_generate_ports() {
 
     BASE_PORT=$(( (hash_decimal % num_buckets) * spacing + min_port ))
 
-    # Probe for collisions against the port registry
+    # Probe for collisions against the port registry AND OS-level port usage
     local probe=0
     local max_probes=10
-    while _port_registry_conflict "$BASE_PORT" "$workspace_name" && [[ $probe -lt $max_probes ]]; do
+    while [[ $probe -lt $max_probes ]]; do
+      local needs_probe=false
+
+      if _port_registry_conflict "$BASE_PORT" "$workspace_name"; then
+        _info "Registry conflict at base port $BASE_PORT, probing..."
+        needs_probe=true
+      elif ! _workspace_owns_base_port "$BASE_PORT" "$workspace_name" && \
+           ! _port_range_available "$BASE_PORT"; then
+        _info "External port conflict in range $BASE_PORT-$((BASE_PORT + HATCH_PORT_SPACING - 1)), probing..."
+        needs_probe=true
+      fi
+
+      if [[ "$needs_probe" != "true" ]]; then
+        break
+      fi
+
       probe=$((probe + 1))
       local bucket=$(( ((hash_decimal + probe) % num_buckets) ))
       BASE_PORT=$(( bucket * spacing + min_port ))
-      _info "Registry conflict, probing alternative base port: $BASE_PORT"
     done
 
     if [[ $probe -ge $max_probes ]]; then
-      _warn "Could not avoid registry conflicts after $max_probes probes (proceeding anyway)"
+      _warn "Could not find a conflict-free port range after $max_probes probes (proceeding anyway)"
     fi
 
     _info "Generated base port for workspace '$workspace_name': $BASE_PORT"
