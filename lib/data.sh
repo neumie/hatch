@@ -38,28 +38,63 @@ hatch_get_latest_migration() {
   echo "$latest_version"
 }
 
-# hatch_get_export_version
-# Returns the schema version from the latest export file by reading the embedded
-# schemaVersion from the first line (the importContentSchemaBegin header).
-# Falls back to filename-based version if parsing fails.
-hatch_get_export_version() {
-  local data_dir="$HATCH_DATA/$PROJECT_NAME"
-  local export_file
-  export_file=$(find "$data_dir" -type f -name "export-*.jsonl.gz" 2>/dev/null | sort -r | head -n 1)
-  if [[ -z "$export_file" ]]; then
-    return 1
-  fi
-
-  # Read schemaVersion from the export header (first JSON line)
+# _read_export_version FILE
+# Reads schemaVersion from the export file header (first JSON line).
+# Falls back to filename-based version if header parsing fails.
+_read_export_version() {
+  local export_file="$1"
   local schema_version
-  schema_version=$(gunzip -c "$export_file" | head -1 | python3 -c "import sys,json; print(json.load(sys.stdin)[1]['schemaVersion'])" 2>/dev/null)
+  schema_version=$(gunzip -c "$export_file" 2>/dev/null | head -1 | python3 -c "import sys,json; print(json.load(sys.stdin)[1]['schemaVersion'])" 2>/dev/null || true)
   if [[ -n "$schema_version" ]]; then
     echo "$schema_version"
     return 0
   fi
-
-  # Fallback to filename-based version
   basename "$export_file" | sed 's/^export-//' | sed 's/\.jsonl\.gz$//'
+}
+
+# _export_version_on_branch VERSION
+# Returns 0 if VERSION resolves to a migration file in MIGRATIONS_DIR, 1 otherwise.
+# Returns 0 when MIGRATIONS_DIR is not configured (nothing to compare against).
+_export_version_on_branch() {
+  local version="$1"
+  [[ -z "$version" ]] && return 1
+  if [[ -z "${MIGRATIONS_DIR:-}" ]] || [[ ! -d "$MIGRATIONS_DIR" ]]; then
+    return 0
+  fi
+  local match
+  match=$(find "$MIGRATIONS_DIR" -name "${version}-*" -type f 2>/dev/null | head -1)
+  [[ -n "$match" ]]
+}
+
+# _find_latest_compatible_export
+# Walks exports newest → oldest and echoes the path of the first one whose
+# schemaVersion resolves to an existing migration in MIGRATIONS_DIR. This lets
+# us pick an older compatible export instead of failing when the newest export
+# comes from a branch with newer migrations than the current one. Returns 1
+# with no output when no compatible export exists.
+_find_latest_compatible_export() {
+  local data_dir="$HATCH_DATA/$PROJECT_NAME"
+  [[ -d "$data_dir" ]] || return 1
+
+  local export_file version
+  while IFS= read -r export_file; do
+    version=$(_read_export_version "$export_file")
+    if _export_version_on_branch "$version"; then
+      echo "$export_file"
+      return 0
+    fi
+  done < <(find "$data_dir" -type f -name "export-*.jsonl.gz" 2>/dev/null | sort -r)
+
+  return 1
+}
+
+# hatch_get_export_version
+# Returns the schemaVersion of the newest export compatible with the current
+# branch's MIGRATIONS_DIR. Returns 1 if no compatible export exists.
+hatch_get_export_version() {
+  local export_file
+  export_file=$(_find_latest_compatible_export) || return 1
+  _read_export_version "$export_file"
 }
 
 # _resolve_migration_name VERSION
@@ -82,10 +117,10 @@ _resolve_migration_name() {
 }
 
 # hatch_import_data
-# Reads PROJECT_NAME. Looks for latest export file in $HATCH_DATA/$PROJECT_NAME/export-*.jsonl.gz
-# If no export found: no-op
-# If found: import data via DATA_IMPORT_CMD
-# Migration orchestration is handled by SETUP_STEPS in hatch.conf
+# Reads PROJECT_NAME. Selects the newest export in $HATCH_DATA/$PROJECT_NAME
+# whose schemaVersion resolves to a migration on the current branch, so older
+# compatible exports can be used when the latest export is from a newer branch.
+# No-op when no compatible export exists. Import is executed via DATA_IMPORT_CMD.
 hatch_import_data() {
   local data_dir="$HATCH_DATA/$PROJECT_NAME"
 
@@ -94,22 +129,31 @@ hatch_import_data() {
     return 0
   fi
 
-  # Find latest export file
-  local export_file
-  export_file=$(find "$data_dir" -type f -name "export-*.jsonl.gz" | sort -r | head -n 1)
+  local latest_export
+  latest_export=$(find "$data_dir" -type f -name "export-*.jsonl.gz" 2>/dev/null | sort -r | head -n 1)
 
-  if [[ -z "$export_file" ]]; then
+  if [[ -z "$latest_export" ]]; then
     _info "No export files found in $data_dir"
     return 0
   fi
 
+  local export_file
+  if ! export_file=$(_find_latest_compatible_export); then
+    _warn "No export compatible with current branch schema in $data_dir"
+    _warn "Latest export: $(basename "$latest_export") (schema: $(_read_export_version "$latest_export"))"
+    _warn "Current branch has no migration matching this or any older export."
+    return 0
+  fi
+
   _header "Importing data from export"
+  if [[ "$export_file" != "$latest_export" ]]; then
+    _warn "Latest export $(basename "$latest_export") is newer than current branch schema"
+    _info "Falling back to newest compatible export"
+  fi
   _info "Export file: $export_file"
 
-  # Extract version from filename
   local export_version
-  export_version=$(hatch_get_export_version)
-
+  export_version=$(_read_export_version "$export_file")
   _info "Export version: $export_version"
 
   if [[ -z "${DATA_IMPORT_CMD:-}" ]]; then
