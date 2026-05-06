@@ -1,5 +1,6 @@
 ---
-description: Add Contember-specific hooks and setup to an existing hatch config
+description: Run the Contember-specific hatch init guide to bootstrap a Contember project's hatch config.
+disable-model-invocation: true
 allowed-tools: [Bash, Read, Write, Edit, Glob, Grep]
 ---
 
