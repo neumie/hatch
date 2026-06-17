@@ -105,6 +105,15 @@ hatch_link_secrets() {
     # Compute relative path from secrets dir
     local rel_path="${secret_file#$secrets_dir/}"
 
+    # Ignore OS metadata that may appear when the secrets directory is opened
+    # in Finder or copied from another machine. These are not project secrets.
+    case "$rel_path" in
+      .DS_Store|*/.DS_Store|Thumbs.db|*/Thumbs.db|Desktop.ini|*/Desktop.ini|desktop.ini|*/desktop.ini)
+        _info "Skipped metadata: $rel_path"
+        continue
+        ;;
+    esac
+
     # Determine target path in workspace
     local target_path="$PWD/$rel_path"
 
