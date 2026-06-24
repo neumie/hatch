@@ -288,6 +288,30 @@ _workspace_owns_base_port() {
   grep -q "^${base_port}"$'\t'"${workspace_name}"$'\t' "$HATCH_PORT_REGISTRY" 2>/dev/null
 }
 
+# Browser-unsafe ports: Chromium and Firefox refuse to connect to these
+# (net::ERR_UNSAFE_PORT). A dev server or API that lands on one is unreachable
+# from the browser even though curl/lsof see it as free and listening — which
+# manifests as a silent "Failed to fetch" / "can't be reached" that looks like
+# an app bug. Within hatch's 10000-60000 allocation range only 10080 (amanda)
+# applies today, but the full ERR_UNSAFE_PORT set is listed so the guard keeps
+# holding if the range or spacing ever widens.
+HATCH_BROWSER_UNSAFE_PORTS="${HATCH_BROWSER_UNSAFE_PORTS:-1 7 9 11 13 15 17 19 20 21 22 23 25 37 42 43 53 69 77 79 87 95 101 102 103 104 109 110 111 113 115 117 119 123 135 137 139 143 161 179 389 427 465 512 513 514 515 526 530 531 532 540 548 554 556 563 587 601 636 989 990 993 995 1719 1720 1723 2049 3659 4045 5060 5061 6000 6566 6665 6666 6667 6668 6669 6697 10080}"
+
+# _port_range_has_unsafe BASE_PORT
+# Returns 0 if any port in [BASE_PORT, BASE_PORT+HATCH_PORT_SPACING) is a
+# browser-unsafe (ERR_UNSAFE_PORT) port the browser will refuse to talk to.
+_port_range_has_unsafe() {
+  local base_port="$1"
+  local end_port=$((base_port + HATCH_PORT_SPACING - 1))
+  local p
+  for p in $HATCH_BROWSER_UNSAFE_PORTS; do
+    if [[ "$p" -ge "$base_port" && "$p" -le "$end_port" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 # ---------------------------------------------------------------------------
 # Port Generation
 # ---------------------------------------------------------------------------
@@ -338,6 +362,11 @@ hatch_generate_ports() {
 
       if _port_registry_conflict "$BASE_PORT" "$workspace_name"; then
         _info "Registry conflict at base port $BASE_PORT, probing..."
+        needs_probe=true
+      elif _port_range_has_unsafe "$BASE_PORT"; then
+        # Always probe past a browser-unsafe range, even if this workspace
+        # already "owns" it in the registry — the browser refuses it regardless.
+        _info "Base port range $BASE_PORT-$((BASE_PORT + HATCH_PORT_SPACING - 1)) contains a browser-unsafe port, probing..."
         needs_probe=true
       elif ! _workspace_owns_base_port "$BASE_PORT" "$workspace_name" && \
            ! _port_range_available "$BASE_PORT"; then
