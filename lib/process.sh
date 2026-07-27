@@ -3,6 +3,37 @@ set -euo pipefail
 # process.sh - Manifest-driven process management for dev servers
 # Depends on: core.sh, manifest.sh, ports.sh
 
+# Stable ownership handle inherited by every Hatch-started service descendant.
+# Unlike PID files, an open descriptor survives re-parenting and cannot become
+# stale via PID reuse. lsof resolves the exact file inode, so workspace paths
+# containing spaces or regex metacharacters are safe.
+_hatch_owner_file() {
+  printf '%s/.hatch/owner' "$(pwd -P)"
+}
+
+_hatch_service_owner_file() {
+  printf '%s/.hatch/owners/%s' "$(pwd -P)" "$1"
+}
+
+_owner_file_pids() {
+  local owner_file="$1"
+  [[ -f "$owner_file" ]] || return 0
+  lsof -t "$owner_file" 2>/dev/null | sort -u
+}
+
+_pid_holds_owner_file() {
+  local pid="$1"
+  local owner_file="$2"
+  [[ -f "$owner_file" ]] || return 1
+  lsof -t -a -p "$pid" "$owner_file" 2>/dev/null | grep -qx "$pid"
+}
+
+# _pid_is_hatch_owned PID
+# Verify that a live process still holds this workspace's ownership descriptor.
+_pid_is_hatch_owned() {
+  _pid_holds_owner_file "$1" "$(_hatch_owner_file)"
+}
+
 # _stop_targeted_servers service1 [service2 ...]
 # Stops only the named servers from .hatch/pids, preserving other entries.
 _stop_targeted_servers() {
@@ -23,18 +54,25 @@ _stop_targeted_servers() {
     done
 
     if [[ $should_stop -eq 1 ]]; then
+      local service_owner_file
+      service_owner_file=$(_hatch_service_owner_file "$name")
       _info "Stopping $name (PID: $pid)"
       if kill -0 "$pid" 2>/dev/null; then
-        # Kill via tree walk (not process group — targeted stop must not affect other servers)
-        _kill_tree "$pid"
-        sleep 0.5
-        if kill -0 "$pid" 2>/dev/null; then
-          _kill_tree "$pid" 9
+        if _pid_holds_owner_file "$pid" "$service_owner_file"; then
+          # Kill via tree walk (not process group — targeted stop must not affect other servers)
+          _kill_tree "$pid"
+          sleep 0.5
+          if kill -0 "$pid" 2>/dev/null; then
+            _kill_tree "$pid" 9
+          fi
+        else
+          _warn "Skipping stale or unowned PID $pid for $name"
         fi
       fi
       if [[ -n "$port" ]] && _check_port "$port"; then
-        _force_free_port "$port"
+        _force_free_port "$port" "$service_owner_file"
       fi
+      _sweep_owner_file "$service_owner_file"
       _success "Stopped $name"
     else
       # Preserve this entry
@@ -60,8 +98,10 @@ hatch_start_servers() {
     has_targets=1
   fi
 
-  # Create .hatch directory if it doesn't exist
-  mkdir -p .hatch
+  # Create runtime state and the stable process-ownership inode. Truncating an
+  # existing file preserves its inode for services still winding down.
+  mkdir -p .hatch/owners
+  : > .hatch/owner
 
   # Stop existing servers before starting new ones
   if [[ -f .hatch/pids ]] && [[ -s .hatch/pids ]]; then
@@ -84,11 +124,10 @@ hatch_start_servers() {
     [[ -z "$server_spec" ]] && continue
 
     # Parse format: "name:directory:command:port_offset"
-    local name directory command port_offset
+    local name directory command
     name=$(echo "$server_spec" | cut -d: -f1)
     directory=$(echo "$server_spec" | cut -d: -f2)
     command=$(echo "$server_spec" | cut -d: -f3)
-    port_offset=$(echo "$server_spec" | rev | cut -d: -f1 | rev)
 
     # Skip if target services specified and this isn't one of them
     if [[ $has_targets -eq 1 ]]; then
@@ -120,16 +159,23 @@ hatch_start_servers() {
     fi
 
     # Replace {PORT} placeholder in command
-    local resolved_command
-    resolved_command=$(echo "$command" | sed "s/{PORT}/$port/g")
+    local resolved_command owner_file service_owner_file
+    resolved_command=${command//\{PORT\}/$port}
+    owner_file=$(_hatch_owner_file)
+    service_owner_file=$(_hatch_service_owner_file "$name")
+    : > "$service_owner_file"
 
     _info "Starting $name in $directory on port $port"
 
-    # Start server in background, detached so it survives parent exit
+    # Start server in background, detached so it survives parent exit. Every
+    # descendant inherits the workspace and per-service ownership descriptors,
+    # including tools that re-parent after the PID file is lost.
     local log_file="$PWD/.hatch/${name}.log"
     (
       cd "$directory" || exit 1
-      _pkg_run $resolved_command > "$log_file" 2>&1
+      # The manifest command is intentionally shell-split into argv here.
+      # shellcheck disable=SC2086
+      _pkg_run $resolved_command 8<"$owner_file" 9<"$service_owner_file" > "$log_file" 2>&1
     ) &
 
     local pid=$!
@@ -148,14 +194,15 @@ hatch_start_servers() {
 
 # hatch_stop_servers
 # Reads .hatch/pids, kills each PID and its children, removes pid file.
-# Uses four layers of cleanup to handle orphaned descendants:
-#   1. Process group kill (catches children that kept the same PGID)
-#   2. Recursive tree kill via pgrep -P
-#   3. Port-based sweep via lsof (catches orphans still holding the port)
-#   4. Workspace path sweep via pgrep -f (catches non-listening orphans like esbuild)
+# Uses three ownership-checked layers to handle orphaned descendants:
+#   1. Recursive tree kill via pgrep -P
+#   2. Port-based sweep via lsof (only Hatch-marked listeners)
+#   3. Ownership-marker sweep (catches daemonized/non-listening descendants)
 hatch_stop_servers() {
   if [[ ! -f .hatch/pids ]]; then
-    _warn "No running servers found (.hatch/pids does not exist)"
+    _warn "PID metadata is missing; sweeping workspace processes instead"
+    hatch_sweep_orphans
+    _success "Workspace orphan sweep complete"
     return 0
   fi
 
@@ -167,39 +214,34 @@ hatch_stop_servers() {
     _info "Stopping $name (PID: $pid)"
 
     if kill -0 "$pid" 2>/dev/null; then
-      # Layer 1: Kill the process group via actual PGID lookup
-      # (subshells inherit parent's PGID, so PID != PGID)
-      local pgid
-      pgid=$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d ' ') || true
-      if [[ -n "$pgid" && "$pgid" != "0" && "$pgid" != "$$" ]]; then
-        kill -TERM -"$pgid" 2>/dev/null || true
-      fi
+      if _pid_is_hatch_owned "$pid"; then
+        # Layer 1: Kill the tree via parent-child walk. Do not signal the
+        # process group: Hatch does not own it, and it may include the user's
+        # terminal or unrelated tools.
+        _kill_tree "$pid"
 
-      # Layer 2: Kill the tree via parent-child walk
-      _kill_tree "$pid"
+        # Wait a moment for graceful shutdown
+        sleep 0.5
 
-      # Wait a moment for graceful shutdown
-      sleep 0.5
-
-      # Force kill if root is still running
-      if kill -0 "$pid" 2>/dev/null; then
-        if [[ -n "$pgid" && "$pgid" != "0" && "$pgid" != "$$" ]]; then
-          kill -KILL -"$pgid" 2>/dev/null || true
+        # Force kill if root is still running
+        if kill -0 "$pid" 2>/dev/null; then
+          _kill_tree "$pid" 9
         fi
-        _kill_tree "$pid" 9
+      else
+        _warn "Skipping stale or unowned PID $pid for $name"
       fi
     fi
 
-    # Layer 3: Sweep the port for orphaned processes (e.g. esbuild)
+    # Layer 2: Sweep the port for orphaned processes (e.g. esbuild)
     if [[ -n "$port" ]] && _check_port "$port"; then
       _force_free_port "$port"
     fi
 
-    # Layer 4: Kill any remaining processes spawned from this workspace directory.
-    # Catches non-listening orphans (e.g. esbuild bundler) that escaped layers 1-3
+    # Layer 3: Kill any remaining descendants attributed to this service.
+    # Catches non-listening orphans (e.g. esbuild bundler) that escaped layers 1-2
     # because they called setsid() and don't hold a port.
     if [[ -n "$directory" ]]; then
-      _sweep_workspace_processes "$directory"
+      _sweep_owner_file "$(_hatch_service_owner_file "$name")"
     fi
 
     _success "Stopped $name"
@@ -217,9 +259,9 @@ hatch_stop_servers() {
 }
 
 # hatch_sweep_orphans
-# Standalone orphan sweep that works without .hatch/pids.
-# Finds and kills any processes whose command line references the current
-# workspace directory. Safe to call repeatedly.
+# Standalone orphan sweep that works without .hatch/pids. It targets only
+# processes holding the ownership descriptor opened by hatch_start_servers.
+# Safe to call repeatedly and cannot match paths from unrelated command lines.
 hatch_sweep_orphans() {
   _sweep_workspace_processes "."
 }
@@ -238,29 +280,37 @@ _kill_tree() {
   kill -"$sig" "$pid" 2>/dev/null || true
 }
 
-# _force_free_port PORT
-# Non-interactive: kills whatever process is listening on PORT.
-# Used during hatch stop to clean up orphaned descendants (e.g. esbuild)
-# that survived the tree kill because their parent-child chain broke.
+# _force_free_port PORT [OWNER_FILE]
+# Non-interactive: kills only listeners holding the requested ownership file
+# (workspace-wide by default). A stale port record must never terminate a
+# process that merely reused the same port or belongs to a sibling service.
 _force_free_port() {
   local port="$1"
-  local pids
+  local owner_file="${2:-$(_hatch_owner_file)}"
+  local pids p killed_any=0
   pids=$(lsof -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null) || true
   [[ -z "$pids" ]] && return 0
 
-  local p
   for p in $pids; do
-    _kill_tree "$p"
+    if _pid_holds_owner_file "$p" "$owner_file"; then
+      _kill_tree "$p"
+      killed_any=1
+    else
+      _warn "Skipping unowned listener PID $p on stale port $port"
+    fi
   done
+  [[ $killed_any -eq 0 ]] && return 0
   sleep 0.5
 
-  # Force kill any survivors
+  # Force kill only owned survivors.
   pids=$(lsof -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null) || true
   for p in $pids; do
-    _kill_tree "$p" 9
+    if _pid_holds_owner_file "$p" "$owner_file"; then
+      _kill_tree "$p" 9
+    fi
   done
 
-  # Wait for port to actually be released (up to 3s)
+  # Wait for an owned listener to release the port (up to 3s).
   local attempts=0
   while _check_port "$port" && [[ $attempts -lt 6 ]]; do
     sleep 0.5
@@ -268,33 +318,35 @@ _force_free_port() {
   done
 }
 
-# _sweep_workspace_processes DIRECTORY
-# Last-resort cleanup: finds processes whose command line references DIRECTORY
-# (e.g. node_modules binaries like esbuild, or node processes running workspace scripts).
-# Matches the absolute directory path anywhere in the command line to catch both
-# native binaries (esbuild, workerd) and node-invoked scripts (vite, wrangler).
-_sweep_workspace_processes() {
-  local directory="$1"
-  local abs_dir
-  abs_dir=$(cd "$directory" 2>/dev/null && pwd) || return 0
+# _sweep_owner_file FILE
+# Kill every marked anchor and its current descendants. Tree walking matters for
+# children that deliberately close inherited descriptors but remain attached to
+# an owned wrapper.
+_sweep_owner_file() {
+  local owner_file="$1"
+  local owner_pids p
+  owner_pids=$(_owner_file_pids "$owner_file") || true
+  [[ -z "$owner_pids" ]] && return 0
 
-  local orphan_pids
-  orphan_pids=$(pgrep -f "${abs_dir}/" 2>/dev/null) || true
-  [[ -z "$orphan_pids" ]] && return 0
-
-  local p
-  for p in $orphan_pids; do
-    # Skip our own shell process
+  for p in $owner_pids; do
     [[ "$p" == "$$" ]] && continue
-    kill -TERM "$p" 2>/dev/null || true
+    _kill_tree "$p"
   done
   sleep 0.3
 
-  orphan_pids=$(pgrep -f "${abs_dir}/" 2>/dev/null) || true
-  for p in $orphan_pids; do
+  owner_pids=$(_owner_file_pids "$owner_file") || true
+  for p in $owner_pids; do
     [[ "$p" == "$$" ]] && continue
-    kill -KILL "$p" 2>/dev/null || true
+    _kill_tree "$p" 9
   done
+}
+
+# _sweep_workspace_processes DIRECTORY
+# Last-resort cleanup by inherited ownership descriptor. DIRECTORY is retained in
+# the API for compatibility with existing callers; ownership is workspace-wide.
+_sweep_workspace_processes() {
+  : "${1:-.}"
+  _sweep_owner_file "$(_hatch_owner_file)"
 }
 
 # _try_reclaim_port PORT [WARNING_PREFIX]
@@ -350,7 +402,8 @@ hatch_server_status() {
   while IFS=: read -r name pid port directory; do
     [[ -z "$pid" ]] && continue
 
-    if kill -0 "$pid" 2>/dev/null; then
+    if kill -0 "$pid" 2>/dev/null \
+      && _pid_holds_owner_file "$pid" "$(_hatch_service_owner_file "$name")"; then
       _success "$name (PID: $pid) - RUNNING - http://localhost:$port?_hatch=$(_urlencode "$WORKSPACE_NAME")"
       has_running=1
     else

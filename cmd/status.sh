@@ -2,9 +2,14 @@
 # status.sh - Show Docker and dev server status
 # Sources: manifest, ports, docker, process
 
+# Runtime installation root is dynamic; each file is checked directly in CI/tests.
+# shellcheck disable=SC1091
 source "$HATCH_LIB/manifest.sh"
+# shellcheck disable=SC1091
 source "$HATCH_LIB/ports.sh"
+# shellcheck disable=SC1091
 source "$HATCH_LIB/docker.sh"
+# shellcheck disable=SC1091
 source "$HATCH_LIB/process.sh"
 
 # Parse flags
@@ -88,8 +93,10 @@ if [[ $MD_OUTPUT -eq 1 ]]; then
         url="http://localhost:$port?_hatch=$(_urlencode "$WORKSPACE_NAME")"
         status="stopped"
         if [[ -f .hatch/pids ]]; then
-          while IFS=: read -r pname ppid pport pdir; do
-            if [[ "$pname" == "$name" ]] && kill -0 "$ppid" 2>/dev/null; then
+          while IFS=: read -r pname ppid _pport _pdir; do
+            if [[ "$pname" == "$name" ]] \
+              && kill -0 "$ppid" 2>/dev/null \
+              && _pid_holds_owner_file "$ppid" "$(_hatch_service_owner_file "$pname")"; then
               status="running"
               break
             fi

@@ -2,9 +2,14 @@
 # down.sh - Tear down workspace infrastructure
 # Sources: manifest, docker, process, ports
 
+# Runtime installation root is dynamic; each file is checked directly in CI/tests.
+# shellcheck disable=SC1091
 source "$HATCH_LIB/manifest.sh"
+# shellcheck disable=SC1091
 source "$HATCH_LIB/ports.sh"
+# shellcheck disable=SC1091
 source "$HATCH_LIB/docker.sh"
+# shellcheck disable=SC1091
 source "$HATCH_LIB/process.sh"
 
 # Parse arguments
@@ -60,7 +65,7 @@ fi
 
 # Confirm unless --force
 if [[ "$FORCE" != "true" ]] && [[ -t 0 ]]; then
-  read -p "Continue? [y/N] " confirm
+  read -r -p "Continue? [y/N] " confirm
   if [[ "$confirm" != "y" ]] && [[ "$confirm" != "Y" ]]; then
     echo "Cancelled"
     exit 0
@@ -101,8 +106,8 @@ fi
 # Release port registry entry
 _port_registry_release "$WORKSPACE_NAME" 2>/dev/null || true
 
-# Final orphan sweep — catches processes that survived all previous cleanup
-# (works without .hatch/pids by scanning the workspace directory in process args)
+# Final orphan sweep — catches Hatch-marked descendants that survived all
+# previous cleanup, even when .hatch/pids is missing.
 hatch_sweep_orphans
 
 # Clean up runtime state only

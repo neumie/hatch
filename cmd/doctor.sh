@@ -64,14 +64,13 @@ else
   FAILED=1
 fi
 
-# Check lsof or ss (for port checking)
+# lsof is required for both port checks and process-ownership descriptors.
 if command -v lsof >/dev/null 2>&1; then
   _success "lsof: installed"
-elif command -v ss >/dev/null 2>&1; then
-  _success "ss: installed (alternative to lsof)"
 else
-  _warn "lsof/ss: not found (port checking may not work)"
+  _error "lsof: not found (required for safe process cleanup)"
   echo "  Install: apt install lsof / brew install lsof"
+  FAILED=1
 fi
 
 # Check package managers if manifest exists
@@ -81,8 +80,11 @@ if [[ -f "hatch.conf" ]] || [[ -f "$HOME/.config/hatch/projects/$(basename "$PWD
   
   # Try to load manifest
   if [[ -f "hatch.conf" ]]; then
+    # User-authored manifest path is intentionally runtime-dependent.
+    # shellcheck disable=SC1091
     source "hatch.conf"
   elif [[ -f "$HOME/.config/hatch/projects/$(basename "$PWD").conf" ]]; then
+    # shellcheck disable=SC1090
     source "$HOME/.config/hatch/projects/$(basename "$PWD").conf"
   fi
   
@@ -137,6 +139,8 @@ fi
 echo ""
 echo "Port registry:"
 if [[ -f "${HATCH_CONFIG}/port-registry" ]]; then
+  # Runtime installation root is dynamic; ports.sh is checked directly.
+  # shellcheck disable=SC1091
   source "$HATCH_LIB/ports.sh" 2>/dev/null || true
   if type _port_registry_list &>/dev/null; then
     _port_registry_list
