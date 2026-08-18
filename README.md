@@ -72,6 +72,16 @@ hatch setup
 
 This runs the full orchestration: installs dependencies, starts Docker, links secrets, injects ports, runs migrations, and imports data. Run this in each new worktree.
 
+### Contember snapshots with data imports
+
+For a split Contember setup, use:
+
+```bash
+SETUP_STEPS="docker:up migrate:execute_until data:import migrate:execute"
+```
+
+Hatch reads the selected export's `schemaVersion` and executes migrations with `--until` that exact boundary before importing data. If `api/migrations/snapshot.json` covers that boundary, the Contember CLI applies it automatically; after import, the final migration step executes any remaining tail migrations. In schema state mode, Contember intentionally defers the latest state overlay during `--until`; that same final unrestricted migration step applies it after import. Hatch treats `snapshot.json` as metadata when naming exports and never generates or rewrites a project's snapshot during setup.
+
 ## Daily Usage
 
 ### Start dev servers

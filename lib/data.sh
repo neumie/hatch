@@ -3,7 +3,8 @@
 # Depends on: core.sh, manifest.sh, migrate.sh
 
 # hatch_get_latest_migration
-# Scans MIGRATIONS_DIR for latest migration version. Returns the version string.
+# Scans MIGRATIONS_DIR for the latest timestamped migration version. Returns the version string.
+# Non-migration metadata such as Contember's snapshot.json and state/*.json is ignored.
 # Requires MIGRATIONS_DIR, MIGRATIONS_FILE_EXT. Uses MIGRATIONS_VERSION_EXTRACT if set,
 # otherwise extracts first 4 hyphen-separated segments from the filename.
 hatch_get_latest_migration() {
@@ -15,8 +16,11 @@ hatch_get_latest_migration() {
     return 1
   fi
 
+  local migration_pattern
+  migration_pattern='[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]-*.'"$ext"
+
   local latest_file
-  latest_file=$(find "$migrations_dir" -type f -name "*.$ext" | sort -r | head -n 1)
+  latest_file=$(find "$migrations_dir" -type f -name "$migration_pattern" | sort -r | head -n 1)
 
   if [[ -z "$latest_file" ]]; then
     _warn "No migrations found in $migrations_dir"
