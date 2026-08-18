@@ -36,11 +36,17 @@ hatch_generate_ports "$WORKSPACE_NAME" "$PROJECT_NAME"
 hatch_allocate_ports
 echo ""
 
-# Check port availability (always check, tolerate own containers)
+# Check port availability (always check, tolerate own containers). Running
+# services and persistent workspace state are separate: stopped containers or
+# volumes mean this is not a fresh database and must not receive a seed import.
 DOCKER_RUNNING=false
+DOCKER_STATE_EXISTS=false
 if hatch_docker_running; then
   _info "Docker services already running for this workspace"
   DOCKER_RUNNING=true
+elif hatch_docker_has_workspace_state "${PROJECT_NAME}-${WORKSPACE_NAME}"; then
+  _info "Persistent Docker state already exists for this workspace"
+  DOCKER_STATE_EXISTS=true
 fi
 
 _info "Checking port availability..."
@@ -114,9 +120,6 @@ hatch_load_hooks
 # Execute SETUP_STEPS in order
 _header "Executing setup steps"
 
-# Track non-fatal step failures (e.g. data:import) to report at the end.
-# Other steps (docker:up, migrate, etc.) are critical and fail-fast via set -e.
-_step_failed=0
 for step in ${SETUP_STEPS:-docker:up}; do
   case "$step" in
     docker:up)
@@ -154,12 +157,12 @@ for step in ${SETUP_STEPS:-docker:up}; do
       fi
       ;;
     data:import)
-      if [[ "$DOCKER_RUNNING" != "true" ]]; then
-        if ! hatch_import_data; then
-          _step_failed=1
-        fi
-      else
+      if [[ "$DOCKER_RUNNING" == "true" ]]; then
         _info "Docker was already running, skipping data import"
+      elif [[ "$DOCKER_STATE_EXISTS" == "true" ]]; then
+        _info "Persistent Docker state already existed, skipping data import"
+      elif ! hatch_import_data; then
+        _die "Data import failed; aborting setup before remaining migrations and hooks"
       fi
       ;;
     custom:*)
@@ -176,11 +179,6 @@ for step in ${SETUP_STEPS:-docker:up}; do
       ;;
   esac
 done
-
-if [[ "$_step_failed" -eq 1 ]]; then
-  echo ""
-  _die "Setup failed: one or more steps did not complete successfully"
-fi
 
 echo ""
 

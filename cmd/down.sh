@@ -100,6 +100,10 @@ if [[ "$DOCKER_AVAILABLE" == "true" ]]; then
     _info "Removing volumes"
     echo "$VOLUMES" | xargs docker volume rm 2>/dev/null || true
   fi
+
+  if ! hatch_docker_assert_workspace_removed "$COMPOSE_PROJECT"; then
+    _die "Teardown incomplete; refusing to continue with stale Docker state"
+  fi
   echo ""
 fi
 

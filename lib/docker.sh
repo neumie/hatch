@@ -351,3 +351,49 @@ hatch_docker_running() {
     return 1
   fi
 }
+
+# hatch_docker_has_workspace_state COMPOSE_PROJECT
+# Returns 0 when a workspace has existing Compose containers or persistent volumes,
+# even if its services are currently stopped. Setup uses this to distinguish a
+# fresh workspace from a stopped one; importing seed data into the latter can fail
+# against a schema that has already migrated past the export boundary.
+hatch_docker_has_workspace_state() {
+  local compose_project="$1"
+
+  if ! _docker_responsive 3; then
+    return 1
+  fi
+
+  local containers volumes
+  containers=$(docker ps -aq --filter "label=com.docker.compose.project=${compose_project}" 2>/dev/null || true)
+  volumes=$(docker volume ls -q --filter "label=com.docker.compose.project=${compose_project}" 2>/dev/null || true)
+
+  [[ -n "$containers" || -n "$volumes" ]]
+}
+
+# hatch_docker_assert_workspace_removed COMPOSE_PROJECT
+# Verifies the hard-reset contract after teardown. Returns 1 and reports every
+# leftover stateful resource instead of allowing reset to continue on stale data.
+hatch_docker_assert_workspace_removed() {
+  local compose_project="$1"
+
+  if ! _docker_responsive 3; then
+    _error "Cannot verify Docker teardown: Docker daemon is unavailable"
+    return 1
+  fi
+
+  local containers volumes
+  containers=$(docker ps -aq --filter "label=com.docker.compose.project=${compose_project}" 2>/dev/null || true)
+  volumes=$(docker volume ls -q --filter "label=com.docker.compose.project=${compose_project}" 2>/dev/null || true)
+
+  if [[ -n "$containers" ]]; then
+    _error "Docker teardown left containers for compose project: $compose_project"
+    echo "$containers" | sed 's/^/  /'
+  fi
+  if [[ -n "$volumes" ]]; then
+    _error "Docker teardown left volumes for compose project: $compose_project"
+    echo "$volumes" | sed 's/^/  /'
+  fi
+
+  [[ -z "$containers" && -z "$volumes" ]]
+}
