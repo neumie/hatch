@@ -308,7 +308,7 @@ Space-separated ordered list. Built-in steps:
 ## Real-World Example (Contember + yarn workspaces)
 
 ```bash
-PROJECT_NAME="crane-rental"
+PROJECT_NAME="acme-app"
 PACKAGE_MANAGER="yarn"
 
 DOCKER_SERVICES="
@@ -327,16 +327,16 @@ DOCKER_ENV="
 "
 
 DEV_SERVERS="
-  admin:admin:workspace @crane-rental-management/admin dev --port {PORT} --strictPort --host 0.0.0.0:10
-  scan:scan:workspace @crane-rental-management/scan dev --port {PORT} --strictPort --host 0.0.0.0:11
-  worker:worker:workspace @crane-rental-management/worker dev --port {PORT}:12
+  admin:admin:workspace @acme-app-management/admin dev --port {PORT} --strictPort --host 0.0.0.0:10
+  scan:scan:workspace @acme-app-management/scan dev --port {PORT} --strictPort --host 0.0.0.0:11
+  worker:worker:workspace @acme-app-management/worker dev --port {PORT}:12
 "
 
 SECRETS="
   admin/.env.local:VITE_CONTEMBER_ADMIN_SESSION_TOKEN=0000000000000000000000000000000000000000
-  admin/.env.local:VITE_CONTEMBER_ADMIN_PROJECT_NAME=crane-rental-management
+  admin/.env.local:VITE_CONTEMBER_ADMIN_PROJECT_NAME=acme-app-management
   scan/.env.local:VITE_CONTEMBER_ADMIN_SESSION_TOKEN=0000000000000000000000000000000000000000
-  scan/.env.local:VITE_CONTEMBER_ADMIN_PROJECT_NAME=crane-rental-management
+  scan/.env.local:VITE_CONTEMBER_ADMIN_PROJECT_NAME=acme-app-management
   scan/.env.local:VITE_MODE=local
 "
 
@@ -345,18 +345,18 @@ PORT_TEMPLATES="
   admin/.env.local:VITE_WORKER_URL=http://localhost:{PORT_worker}
   scan/.env.local:VITE_CONTEMBER_ADMIN_API_BASE_URL=http://localhost:{PORT_contember-engine}
   scan/.env.local:VITE_WORKER_URL=http://localhost:{PORT_worker}
-  worker/.dev.vars:CONTEMBER_API_URL=http://localhost:{PORT_contember-engine}/content/crane-rental-management/live
+  worker/.dev.vars:CONTEMBER_API_URL=http://localhost:{PORT_contember-engine}/content/acme-app-management/live
   worker/.dev.vars:ADMIN_URL=http://localhost:{PORT_admin}
 "
 
 MCP_SERVERS="
-  crane-rental:npx:tsx mcp/host/src/index.ts
+  acme-app:npx:tsx mcp/host/src/index.ts
 "
 
 MCP_ENV="
-  crane-rental:CONTEMBER_API_URL=http://localhost:{PORT_contember-engine}/content/crane-rental-management/live
-  crane-rental:CONTEMBER_API_TOKEN=0000000000000000000000000000000000000000
-  crane-rental:ENVIRONMENT=local
+  acme-app:CONTEMBER_API_URL=http://localhost:{PORT_contember-engine}/content/acme-app-management/live
+  acme-app:CONTEMBER_API_TOKEN=0000000000000000000000000000000000000000
+  acme-app:ENVIRONMENT=local
 "
 
 SECRET_FILES="
@@ -373,12 +373,12 @@ DB_USER="contember"
 DB_PASSWORD="contember"
 DB_NAME="contember"
 
-DATA_IMPORT_CMD="crane_rental_import"
-DATA_EXPORT_CMD="crane_rental_export"
+DATA_IMPORT_CMD="acme_app_import"
+DATA_EXPORT_CMD="acme_app_export"
 # ^ Import uses HTTP API (curl) to avoid Docker volume mount path issues
 # ^ Export uses _pkg_run — works because hatch creates export_path in project dir
 
-SETUP_STEPS="docker:up deps:install migrate:execute_until data:import migrate:execute custom:crane_rental_setup"
+SETUP_STEPS="docker:up deps:install migrate:execute_until data:import migrate:execute custom:acme_app_setup"
 
 POST_INSTALL_CMD="yarn client:generate"
 HOOKS_FILE="hatch.hooks.sh"

@@ -8,7 +8,7 @@ Contember has three API layers, all served by the `contember-engine` Docker serv
 
 **Tenant layer** (`{engine}/tenant`) — Authentication and user management. The root superuser authenticates with token `0000000000000000000000000000000000000000` (40 hex zeros). Operations: `me { person { id } }`, `unmanagedInvite`, `addProjectMember`, `personByEmail`.
 
-**Content layer** (`{engine}/content/{project-slug}/live`) — Business entities defined by the project schema. Each project has a slug (e.g., `crane-rental-management`) that appears in API URLs. Entities like `Person` bridge to tenant via a `personId` column.
+**Content layer** (`{engine}/content/{project-slug}/live`) — Business entities defined by the project schema. Each project has a slug (e.g., `acme-app-management`) that appears in API URLs. Entities like `Person` bridge to tenant via a `personId` column.
 
 **Actions layer** (`{engine}/actions/{project-slug}`) — Webhook/trigger runtime. `setVariables` configures runtime values (e.g., `apiKey`, `baseUrl`) that action triggers reference when calling external services.
 
@@ -41,7 +41,7 @@ Contember has three API layers, all served by the `contember-engine` Docker serv
    - The engine service name (usually `contember-engine`)
 4. Read `package.json` and find the `contember` script entry (typically `"contember": "docker compose run --rm contember-cli"`)
 5. Store these discovered values — you will use them throughout:
-   - `PROJECT_SLUG` (e.g., `crane-rental-management`)
+   - `PROJECT_SLUG` (e.g., `acme-app-management`)
    - `ENGINE_SERVICE` (e.g., `contember-engine`)
    - `HAS_MINIO` (boolean)
    - `PACKAGE_MANAGER` (from hatch.conf)
@@ -501,8 +501,8 @@ export async function invite_imported_users() {
 
 | Placeholder | Source | Example |
 |---|---|---|
-| `{{PROJECT_NAME}}` | hatch.conf `PROJECT_NAME` | `crane-rental` |
-| `{{PROJECT_SLUG}}` | docker-compose.yml | `crane-rental-management` |
+| `{{PROJECT_NAME}}` | hatch.conf `PROJECT_NAME` | `acme-app` |
+| `{{PROJECT_SLUG}}` | docker-compose.yml | `acme-app-management` |
 | `{{PERSON_ENTITY}}` | Schema entity with `personId` | `Person` |
 | `{{USER_ENTITY}}` | Schema entity related to Person | `User` |
 | `{{PERSON_RELATION}}` | Field name on User → Person | `person` |
